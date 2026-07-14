@@ -89,8 +89,8 @@ type CustomConfiguration {
 	Image string `json:"image"`
 	// [可选] 默认值：enterprise；可选 enterprise / personal
 	ImageRegistryType string `json:"imageRegistryType,optional,default=enterprise,options=[enterprise,personal]"`
-	// [必填] 容器启动命令，例如 ["/usr/local/bin/start-lightweight-code-interpreter.sh"]
-	Command []string `json:"command"`
+	// [可选] 容器启动命令；未传时从镜像 Config.Entrypoint 获取，为空则回退到 Config.Cmd
+	Command []string `json:"command,optional"`
 	// [可选] 默认为空数组/不传
 	Args []string `json:"args,optional"`
 	// [可选] 默认为空数组/不传
@@ -122,7 +122,7 @@ type CreateSandboxToolRequest {
 	Tags []Tag `json:"tags,optional"`
 	// [可选] 默认使用 PUBLIC 网络
 	NetworkConfiguration NetworkConfiguration `json:"networkConfiguration,optional"`
-	// [必填] 自定义运行配置，其中 image 和 command 必填
+	// [必填] 自定义运行配置，其中 image 必填
 	CustomConfiguration CustomConfiguration `json:"customConfiguration"`
 }
 

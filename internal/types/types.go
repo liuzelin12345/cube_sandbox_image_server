@@ -28,7 +28,7 @@ type CreateSandboxToolResponse struct {
 type CustomConfiguration struct {
 	Image             string                `json:"image"`
 	ImageRegistryType string                `json:"imageRegistryType,optional,default=enterprise,options=[enterprise,personal]"`
-	Command           []string              `json:"command"`
+	Command           []string              `json:"command,optional"`
 	Args              []string              `json:"args,optional"`
 	Env               []EnvironmentVariable `json:"env,optional"`
 	Ports             []PortConfiguration   `json:"ports,optional"`

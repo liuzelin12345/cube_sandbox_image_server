@@ -11,9 +11,9 @@ type TencentCloudConfig struct {
 	SecretKey          string        `json:",env=TENCENTCLOUD_SECRET_KEY"`
 	Region             string        `json:",env=TENCENTCLOUD_REGION,default=ap-shanghai"`
 	Endpoint           string        `json:",env=TENCENTCLOUD_ENDPOINT,default=ags.tencentcloudapi.com"`
-	RequestTimeout     time.Duration `json:",default=15s"`
-	StatusPollInterval time.Duration `json:",default=1s"`
-	StatusPollTimeout  time.Duration `json:",default=45s"`
+	RequestTimeout     time.Duration `json:",default=10s"`
+	StatusPollInterval time.Duration `json:",default=5s"`
+	StatusPollTimeout  time.Duration `json:",default=20s"`
 }
 
 type ImageSyncConfig struct {
@@ -25,8 +25,16 @@ type ImageSyncConfig struct {
 	RetryInterval    time.Duration `json:",default=500ms"`
 }
 
+type RegistryConfig struct {
+	Username       string        `json:",env=REGISTRY_USERNAME"`
+	Password       string        `json:",env=REGISTRY_PASSWORD"`
+	AllowedHosts   []string      `json:",default=[ths-shanghai-tcr.tencentcloudcr.com]"`
+	RequestTimeout time.Duration `json:",default=10s"`
+}
+
 type Config struct {
 	rest.RestConf
 	TencentCloud TencentCloudConfig
 	ImageSync    ImageSyncConfig
+	Registry     RegistryConfig
 }

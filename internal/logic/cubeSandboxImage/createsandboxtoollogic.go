@@ -14,6 +14,7 @@ import (
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/apperror"
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/registrycommand"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/types"
 
@@ -37,7 +38,31 @@ func NewCreateSandboxToolLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 
 // 向腾讯云发送请求
 func (l *CreateSandboxToolLogic) CreateSandboxTool(req *types.CreateSandboxToolRequest) (resp *types.CreateSandboxToolResponse, err error) {
-	request, err := buildCreateSandboxToolRequest(req)
+	if req == nil {
+		return rejectedResponse("INVALID_ARGUMENT", "request body is required", ""), nil
+	}
+	if strings.TrimSpace(req.CustomConfiguration.Image) == "" {
+		return rejectedResponse("INVALID_ARGUMENT", "customConfiguration.image is required", ""), nil
+	}
+	if l.svcCtx.ImageCommandResolver == nil {
+		return nil, apperror.New(500, "IMAGE_COMMAND_RESOLVER_UNAVAILABLE", "镜像启动命令解析器未初始化", nil)
+	}
+
+	defaultCommand, err := l.svcCtx.ImageCommandResolver.ResolveCommand(l.ctx, req.CustomConfiguration.Image)
+	if err != nil {
+		l.Errorf("resolve default image command failed")
+		if errors.Is(err, registrycommand.ErrRegistryNotAllowed) {
+			return rejectedResponse("IMAGE_REGISTRY_NOT_ALLOWED", "镜像仓库不在允许列表中", ""), nil
+		}
+		return rejectedResponse("IMAGE_COMMAND_RESOLVE_FAILED", "获取镜像默认启动命令失败", ""), nil
+	}
+
+	effectiveRequest := *req
+	effectiveRequest.CustomConfiguration = req.CustomConfiguration
+	if len(effectiveRequest.CustomConfiguration.Command) == 0 {
+		effectiveRequest.CustomConfiguration.Command = defaultCommand
+	}
+	request, err := buildCreateSandboxToolRequest(&effectiveRequest)
 	if err != nil {
 		return rejectedResponse("INVALID_ARGUMENT", err.Error(), ""), nil
 	}

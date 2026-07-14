@@ -10,8 +10,7 @@ func TestCreateSandboxToolRequestDefaults(t *testing.T) {
 	payload := []byte(`{
 		"toolName":"sandbox-tool",
 		"customConfiguration":{
-			"image":"registry.example.com/team/sandbox:latest",
-			"command":["/usr/local/bin/start-lightweight-code-interpreter.sh"]
+			"image":"registry.example.com/team/sandbox:latest"
 		}
 	}`)
 
@@ -30,14 +29,30 @@ func TestCreateSandboxToolRequestDefaults(t *testing.T) {
 	}
 }
 
-func TestCreateSandboxToolRequestRequiresCommand(t *testing.T) {
+func TestCreateSandboxToolRequestAllowsMissingCommand(t *testing.T) {
 	payload := []byte(`{
 		"toolName":"sandbox-tool",
 		"customConfiguration":{"image":"registry.example.com/team/sandbox:latest"}
 	}`)
 
 	var request CreateSandboxToolRequest
-	if err := mapping.UnmarshalJsonBytes(payload, &request); err == nil {
-		t.Fatal("UnmarshalJsonBytes() error = nil")
+	if err := mapping.UnmarshalJsonBytes(payload, &request); err != nil {
+		t.Fatalf("UnmarshalJsonBytes() error = %v", err)
+	}
+	if len(request.CustomConfiguration.Command) != 0 {
+		t.Fatalf("Command = %#v, want empty", request.CustomConfiguration.Command)
+	}
+}
+
+func TestCreateSandboxToolRequestStillRequiresToolNameAndImage(t *testing.T) {
+	tests := []string{
+		`{"customConfiguration":{"image":"registry.example.com/team/sandbox:latest"}}`,
+		`{"toolName":"sandbox-tool","customConfiguration":{}}`,
+	}
+	for _, payload := range tests {
+		var request CreateSandboxToolRequest
+		if err := mapping.UnmarshalJsonBytes([]byte(payload), &request); err == nil {
+			t.Fatalf("UnmarshalJsonBytes(%s) error = nil", payload)
+		}
 	}
 }
