@@ -1,0 +1,172 @@
+syntax = "v1"
+
+info (
+	title:   "Cube Sandbox Image Server API"
+	desc:    "自定义沙箱工具创建与镜像同步服务"
+	author:  "lzl"
+	version: "v1"
+)
+
+type Tag {
+	// [必填] 标签键
+	Key string `json:"key"`
+	// [必填] 标签值
+	Value string `json:"value"`
+}
+
+type VpcConfiguration {
+	// [条件必填] networkMode=VPC 时至少填写一个子网 ID
+	SubnetIds []string `json:"subnetIds,optional"`
+	// [可选] 默认为空数组/不传
+	SecurityGroupIds []string `json:"securityGroupIds,optional"`
+}
+
+type NetworkConfiguration {
+	// [可选] 默认值：PUBLIC；可选 PUBLIC / VPC / SANDBOX
+	NetworkMode string `json:"networkMode,optional,default=PUBLIC,options=[PUBLIC,VPC,SANDBOX]"`
+	// [条件必填] networkMode=VPC 时必须配置，其他模式不得传入
+	VpcConfig VpcConfiguration `json:"vpcConfig,optional"`
+}
+
+type EnvironmentVariable {
+	// [必填] 环境变量名
+	Name string `json:"name"`
+	// [必填] 环境变量值
+	Value string `json:"value"`
+}
+
+type PortConfiguration {
+	// [必填] 端口名称
+	Name string `json:"name"`
+	// [必填] 目前仅支持 TCP
+	Protocol string `json:"protocol,options=[TCP]"`
+	// [必填] 1-65535
+	Port int64 `json:"port"`
+}
+
+type ResourceConfiguration {
+	// [可选] 默认值：1
+	CPU string `json:"cpu,optional,default=1"`
+	// [可选] 默认值：2Gi
+	Memory string `json:"memory,optional,default=2Gi"`
+}
+
+type HttpGetAction {
+	// [可选] 默认值：/health
+	Path string `json:"path,optional,default=/health"`
+	// [可选] 默认值：49999
+	Port int64 `json:"port,optional,default=49999"`
+	// [可选] 默认值：HTTP
+	Scheme string `json:"scheme,optional,default=HTTP,options=[HTTP,HTTPS]"`
+}
+
+type ProbeConfiguration {
+	// [可选] HTTP GET 探针，字段默认值见 HttpGetAction
+	HttpGet HttpGetAction `json:"httpGet,optional"`
+	// [可选] 默认值：30000
+	ReadyTimeoutMs int64 `json:"readyTimeoutMs,optional,default=30000"`
+	// [可选] 默认值：1000
+	ProbeTimeoutMs int64 `json:"probeTimeoutMs,optional,default=1000"`
+	// [可选] 默认值：1000
+	ProbePeriodMs int64 `json:"probePeriodMs,optional,default=1000"`
+	// [可选] 默认值：1
+	SuccessThreshold int64 `json:"successThreshold,optional,default=1"`
+	// [可选] 默认值：100
+	FailureThreshold int64 `json:"failureThreshold,optional,default=100"`
+}
+
+type DnsConfiguration {
+	// [可选] 默认为空数组/不传
+	Servers []string `json:"servers,optional"`
+	// [可选] 默认为空数组/不传
+	Searches []string `json:"searches,optional"`
+	// [可选] 默认为空数组/不传
+	Options []string `json:"options,optional"`
+}
+
+type CustomConfiguration {
+	// [必填] 可拉取的运行镜像地址
+	Image string `json:"image"`
+	// [可选] 默认值：enterprise；可选 enterprise / personal
+	ImageRegistryType string `json:"imageRegistryType,optional,default=enterprise,options=[enterprise,personal]"`
+	// [必填] 容器启动命令，例如 ["/usr/local/bin/start-lightweight-code-interpreter.sh"]
+	Command []string `json:"command"`
+	// [可选] 默认为空数组/不传
+	Args []string `json:"args,optional"`
+	// [可选] 默认为空数组/不传
+	Env []EnvironmentVariable `json:"env,optional"`
+	// [可选] 默认值：[{"name":"http","protocol":"TCP","port":49999}]
+	Ports []PortConfiguration `json:"ports,optional"`
+	// [可选] CPU 默认 1，Memory 默认 2Gi
+	Resources ResourceConfiguration `json:"resources,optional"`
+	// [可选] 默认启用 /health:49999 HTTP 探针
+	Probe ProbeConfiguration `json:"probe,optional"`
+	// [可选] 三个子字段都为空时不传 DNSConfig
+	DnsConfig DnsConfiguration `json:"dnsConfig,optional"`
+}
+
+type CreateSandboxToolRequest {
+	// [必填] Tool 名称，同一 AppId 下必须唯一
+	ToolName string `json:"toolName"`
+	// [可选] 默认为空/不传
+	Description string `json:"description,optional"`
+	// [可选] 默认值：5m，最大 24h
+	DefaultTimeout string `json:"defaultTimeout,optional,default=5m"`
+	// [可选] 幂等 Token，默认为空/不传；同一次创建重试时应保持不变
+	ClientToken string `json:"clientToken,optional"`
+	// [可选] 默认值：qcs::cam::uin/100032159895:roleName/sandbox_test
+	RoleArn string `json:"roleArn,optional,default=qcs::cam::uin/100032159895:roleName/sandbox_test"`
+	// [可选] 默认值：false
+	Persistent bool `json:"persistent,optional,default=false"`
+	// [可选] 默认为空数组/不传
+	Tags []Tag `json:"tags,optional"`
+	// [可选] 默认使用 PUBLIC 网络
+	NetworkConfiguration NetworkConfiguration `json:"networkConfiguration,optional"`
+	// [必填] 自定义运行配置，其中 image 和 command 必填
+	CustomConfiguration CustomConfiguration `json:"customConfiguration"`
+}
+
+type CreateSandboxToolResponse {
+	Accepted     bool   `json:"accepted"`
+	Status       string `json:"status,optional"`
+	StatusReason string `json:"statusReason,optional"`
+	ErrorCode    string `json:"errorCode,optional"`
+	ErrorMessage string `json:"errorMessage,optional"`
+	ToolId       string `json:"toolId,optional"`
+	RequestId    string `json:"requestId,optional"`
+}
+
+type SyncImageRequest {
+	SrcHub string `form:"srcHub"`
+	DstHub string `form:"dstHub"`
+	Group  string `form:"group"`
+	Image  string `form:"image"`
+	Tag    string `form:"tag"`
+}
+
+type SyncImageData {
+	Image   string `json:"image"`
+	NewSync bool   `json:"newSync"`
+	Time    int64  `json:"time"`
+}
+
+type SyncImageResponse {
+	Code   int64         `json:"code"`
+	Data   SyncImageData `json:"data"`
+	Status string        `json:"status"`
+}
+
+@server (
+	prefix: /api/v1
+	group:  cubeSandboxImage
+)
+service cube_sandbox_image_server-api {
+	@doc "创建腾讯云自定义沙箱工具"
+	@handler CreateSandboxToolHandler
+	post /sandbox/tools (CreateSandboxToolRequest) returns (CreateSandboxToolResponse)
+
+	@doc "将镜像从源镜像仓库同步到目标镜像仓库"
+	@handler SyncImageHandler
+	get /images/sync (SyncImageRequest) returns (SyncImageResponse)
+}
+

@@ -1,0 +1,168 @@
+// Code scaffolded by goctl. Safe to edit.
+// goctl 1.10.1
+
+package cubeSandboxImage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	tcags "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ags/v20250920"
+	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
+
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/apperror"
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/types"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type CreateSandboxToolLogic struct {
+	logx.Logger
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+// 创建腾讯云自定义沙箱工具
+func NewCreateSandboxToolLogic(ctx context.Context, svcCtx *svc.ServiceContext) *CreateSandboxToolLogic {
+	return &CreateSandboxToolLogic{
+		Logger: logx.WithContext(ctx),
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+// 向腾讯云发送请求
+func (l *CreateSandboxToolLogic) CreateSandboxTool(req *types.CreateSandboxToolRequest) (resp *types.CreateSandboxToolResponse, err error) {
+	request, err := buildCreateSandboxToolRequest(req)
+	if err != nil {
+		return rejectedResponse("INVALID_ARGUMENT", err.Error(), ""), nil
+	}
+	if l.svcCtx.SandboxToolClient == nil {
+		return nil, apperror.New(500, "AGS_CLIENT_UNAVAILABLE", "腾讯云 AGS 客户端未初始化", nil)
+	}
+
+	createCtx, cancel := withOptionalTimeout(l.ctx, l.svcCtx.Config.TencentCloud.RequestTimeout)
+	response, err := l.svcCtx.SandboxToolClient.CreateSandboxToolWithContext(createCtx, request)
+	cancel()
+	if err != nil {
+		return createErrorResponse(err), nil
+	}
+	if response == nil || response.Response == nil || response.Response.ToolId == nil || strings.TrimSpace(*response.Response.ToolId) == "" {
+		return rejectedResponse("INVALID_CLOUD_RESPONSE", "腾讯云 CreateSandboxTool 返回了无效响应", ""), nil
+	}
+
+	toolID := strings.TrimSpace(*response.Response.ToolId)
+	requestID := ""
+	if response.Response.RequestId != nil {
+		requestID = *response.Response.RequestId
+	}
+	result := &types.CreateSandboxToolResponse{
+		Accepted:  true,
+		Status:    "CREATING",
+		ToolId:    toolID,
+		RequestId: requestID,
+	}
+
+	l.waitForToolStatus(result)
+	return result, nil
+}
+
+// 查询沙箱工具的状态
+func (l *CreateSandboxToolLogic) waitForToolStatus(result *types.CreateSandboxToolResponse) {
+	pollCtx, cancel := withOptionalTimeout(l.ctx, l.svcCtx.Config.TencentCloud.StatusPollTimeout)
+	defer cancel()
+
+	interval := l.svcCtx.Config.TencentCloud.StatusPollInterval
+	if interval <= 0 {
+		interval = time.Second
+	}
+	queriedSuccessfully := false
+	var lastErr error
+
+	for {
+		tool, err := l.describeTool(pollCtx, result.ToolId)
+		if err != nil {
+			lastErr = err
+		} else {
+			queriedSuccessfully = true
+			lastErr = nil
+			if tool.Status != nil && strings.TrimSpace(*tool.Status) != "" {
+				result.Status = strings.ToUpper(strings.TrimSpace(*tool.Status))
+			}
+			if tool.StatusReason != nil {
+				result.StatusReason = strings.TrimSpace(*tool.StatusReason)
+			}
+			if result.Status == "ACTIVE" {
+				return
+			}
+			if result.Status == "FAILED" {
+				result.ErrorCode = "CREATE_SANDBOX_TOOL_FAILED"
+				result.ErrorMessage = result.StatusReason
+				if result.ErrorMessage == "" {
+					result.ErrorMessage = "腾讯云沙箱工具创建失败"
+				}
+				return
+			}
+		}
+
+		timer := time.NewTimer(interval)
+		select {
+		case <-pollCtx.Done():
+			timer.Stop()
+			if !queriedSuccessfully && lastErr != nil {
+				result.ErrorCode = "STATUS_QUERY_FAILED"
+				result.ErrorMessage = "沙箱工具已提交创建，但查询状态失败: " + lastErr.Error()
+			}
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func (l *CreateSandboxToolLogic) describeTool(ctx context.Context, toolID string) (*tcags.SandboxTool, error) {
+	request := tcags.NewDescribeSandboxToolListRequest()
+	request.ToolIds = []*string{stringPtr(toolID)}
+	response, err := l.svcCtx.SandboxToolClient.DescribeSandboxToolListWithContext(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("describe sandbox tool: %w", err)
+	}
+	if response == nil || response.Response == nil || len(response.Response.SandboxToolSet) == 0 || response.Response.SandboxToolSet[0] == nil {
+		return nil, fmt.Errorf("describe sandbox tool returned no matching tool")
+	}
+	return response.Response.SandboxToolSet[0], nil
+}
+
+func createErrorResponse(err error) *types.CreateSandboxToolResponse {
+	var sdkErr *tcerr.TencentCloudSDKError
+	if errors.As(err, &sdkErr) {
+		return rejectedResponse(sdkErr.GetCode(), sdkErr.GetMessage(), sdkErr.GetRequestId())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return rejectedResponse("TENCENTCLOUD_TIMEOUT", "调用腾讯云 CreateSandboxTool 超时；如已设置 clientToken，可使用同一 token 安全重试", "")
+	}
+	if errors.Is(err, context.Canceled) {
+		return rejectedResponse("REQUEST_CANCELED", "创建请求已取消", "")
+	}
+	return rejectedResponse("CREATE_SANDBOX_TOOL_ERROR", err.Error(), "")
+}
+
+func rejectedResponse(code, message, requestID string) *types.CreateSandboxToolResponse {
+	return &types.CreateSandboxToolResponse{
+		Accepted:     false,
+		Status:       "REJECTED",
+		ErrorCode:    code,
+		ErrorMessage: message,
+		RequestId:    requestID,
+	}
+}
+
+func withOptionalTimeout(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, timeout)
+}
