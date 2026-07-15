@@ -36,17 +36,11 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) (*ServiceContext, error) {
-	secretID := strings.TrimSpace(c.TencentCloud.SecretID)
-	if secretID == "" {
-		return nil, fmt.Errorf("TENCENTCLOUD_SECRET_ID is required")
-	}
-	secretKey := strings.TrimSpace(c.TencentCloud.SecretKey)
-	if secretKey == "" {
-		return nil, fmt.Errorf("TENCENTCLOUD_SECRET_KEY is required")
-	}
 	if err := validateConfig(c); err != nil {
 		return nil, err
 	}
+	secretID := strings.TrimSpace(c.TencentCloud.SecretID)
+	secretKey := strings.TrimSpace(c.TencentCloud.SecretKey)
 
 	clientProfile := profile.NewClientProfile()
 	clientProfile.HttpProfile.Endpoint = strings.TrimSpace(c.TencentCloud.Endpoint)
@@ -89,6 +83,12 @@ func NewServiceContext(c config.Config) (*ServiceContext, error) {
 }
 
 func validateConfig(c config.Config) error {
+	if strings.TrimSpace(c.TencentCloud.SecretID) == "" {
+		return fmt.Errorf("TencentCloud.SecretID is required")
+	}
+	if strings.TrimSpace(c.TencentCloud.SecretKey) == "" {
+		return fmt.Errorf("TencentCloud.SecretKey is required")
+	}
 	if strings.TrimSpace(c.TencentCloud.Region) == "" {
 		return fmt.Errorf("TencentCloud.Region is required")
 	}
@@ -111,10 +111,10 @@ func validateConfig(c config.Config) error {
 		return fmt.Errorf("ImageSync.AttemptTimeout must be greater than zero")
 	}
 	if strings.TrimSpace(c.Registry.Username) == "" {
-		return fmt.Errorf("REGISTRY_USERNAME is required")
+		return fmt.Errorf("Registry.Username is required")
 	}
 	if strings.TrimSpace(c.Registry.Password) == "" {
-		return fmt.Errorf("REGISTRY_PASSWORD is required")
+		return fmt.Errorf("Registry.Password is required")
 	}
 	if len(c.Registry.AllowedHosts) == 0 {
 		return fmt.Errorf("Registry.AllowedHosts must contain at least one host")

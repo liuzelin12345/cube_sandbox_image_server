@@ -135,18 +135,21 @@ curl -sS --get 'http://127.0.0.1:43999/api/v1/images/sync' \
 
 ## 配置
 
-启动前必须通过进程环境变量提供腾讯云凭证和 Registry 凭证：
+服务配置统一从 YAML 文件读取。首次运行前，从不含真实凭证的模板生成私有运行配置：
 
 ```bash
-export TENCENTCLOUD_SECRET_ID='...'
-export TENCENTCLOUD_SECRET_KEY='...'
-export REGISTRY_USERNAME='...'
-export REGISTRY_PASSWORD='...'
+make config
 ```
 
-默认镜像同步地址为 `http://172.20.208.115/sync/image`，可以通过 `IMAGE_SYNC_ENDPOINT` 覆盖。超时、重试次数和响应体上限在 `etc/cubesandboximageserver-api.yaml` 中配置。服务不会自动读取 `.env`，如果本地使用 `.env`，需要先将其导入当前 shell。
+该命令从 `etc/cubesandboximageserver-api.example.yaml` 创建 `etc/cubesandboximageserver-api.yaml`，如果目标文件已经存在则保持原文件不变。实际运行配置已加入 `.gitignore`，请在其中填写 `TencentCloud.SecretID`、`TencentCloud.SecretKey`、`Registry.Username` 和 `Registry.Password`，不要将真实凭证提交到仓库。
 
-可以从 `.env.example` 复制本地配置。Registry 仅允许 HTTPS，镜像仓库主机必须列在 `etc/cubesandboximageserver-api.yaml` 的 `Registry.AllowedHosts` 中，默认仅允许 `ths-shanghai-tcr.tencentcloudcr.com`。`Registry.RequestTimeout` 默认为 `10s`；镜像为多架构时固定选择 `linux/amd64`。Registry 与 Bearer token 服务使用不同主机时，两者都必须纳入白名单，否则客户端不会向未授权主机发送 Registry 凭证。Registry 返回的跨主机 manifest/config blob 下载可以跟随 HTTPS 重定向，但仅允许不携带 `Authorization` 的 `GET`/`HEAD` 请求，因此 COS 等对象存储主机无需加入 Registry 白名单。
+腾讯云 Region/Endpoint、镜像同步地址、超时、重试次数和响应体上限也都在 YAML 中配置。旧的 `TENCENTCLOUD_*`、`IMAGE_SYNC_ENDPOINT`、`REGISTRY_*` 环境变量不再参与配置加载，也不会覆盖 YAML。需要使用其他运行配置时，通过 `-f` 显式指定：
+
+```bash
+go run . -f /path/to/cubesandboximageserver-api.yaml
+```
+
+Registry 仅允许 HTTPS，镜像仓库主机必须列在运行配置的 `Registry.AllowedHosts` 中，默认仅允许 `ths-shanghai-tcr.tencentcloudcr.com`。`Registry.RequestTimeout` 默认为 `10s`；镜像为多架构时固定选择 `linux/amd64`。Registry 与 Bearer token 服务使用不同主机时，两者都必须纳入白名单，否则客户端不会向未授权主机发送 Registry 凭证。Registry 返回的跨主机 manifest/config blob 下载可以跟随 HTTPS 重定向，但仅允许不携带 `Authorization` 的 `GET`/`HEAD` 请求，因此 COS 等对象存储主机无需加入 Registry 白名单。
 
 `POST /api/v1/sandbox/tools` 响应中，`accepted=true` 表示腾讯云控制面已接受创建请求；异步创建仍可能最终返回 `status=FAILED`，此时可通过 `statusReason`、`errorCode` 和 `errorMessage` 查看原因。
 
@@ -158,8 +161,9 @@ Registry 解析失败时接口仍返回 HTTP 200，但响应为 `accepted=false`
 
 ```bash
 make api          # 使用项目锁定的 goctl 重新生成代码
+make config       # 从示例创建私有运行配置，不覆盖已有文件
 make check        # 验证 API、格式化、整理依赖、vet 和测试
-make run          # 启动服务
+make run          # 确保运行配置存在后启动服务
 ```
 
 goctl 版本作为 Go tool 依赖锁定在当前项目的 `go.mod` 中，无需全局安装。
