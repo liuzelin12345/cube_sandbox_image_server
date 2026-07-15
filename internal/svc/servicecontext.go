@@ -98,12 +98,6 @@ func validateConfig(c config.Config) error {
 	if c.TencentCloud.RequestTimeout <= 0 {
 		return fmt.Errorf("TencentCloud.RequestTimeout must be greater than zero")
 	}
-	if c.TencentCloud.StatusPollInterval <= 0 {
-		return fmt.Errorf("TencentCloud.StatusPollInterval must be greater than zero")
-	}
-	if c.TencentCloud.StatusPollTimeout <= 0 {
-		return fmt.Errorf("TencentCloud.StatusPollTimeout must be greater than zero")
-	}
 	if c.ImageSync.RequestTimeout <= 0 {
 		return fmt.Errorf("ImageSync.RequestTimeout must be greater than zero")
 	}

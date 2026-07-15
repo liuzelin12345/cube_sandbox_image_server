@@ -28,6 +28,12 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/sandbox/tools",
 				Handler: cubeSandboxImage.CreateSandboxToolHandler(serverCtx),
 			},
+			{
+				// 查询腾讯云自定义沙箱工具状态
+				Method:  http.MethodGet,
+				Path:    "/sandbox/tools/status",
+				Handler: cubeSandboxImage.GetSandboxToolStatusHandler(serverCtx),
+			},
 		},
 		rest.WithPrefix("/api/v1"),
 	)

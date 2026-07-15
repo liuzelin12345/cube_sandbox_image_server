@@ -6,15 +6,14 @@ package cubeSandboxImage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
-	tcags "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ags/v20250920"
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/apperror"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/registrycommand"
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/config"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/types"
 
@@ -48,13 +47,16 @@ func (l *CreateSandboxToolLogic) CreateSandboxTool(req *types.CreateSandboxToolR
 		return nil, apperror.New(500, "IMAGE_COMMAND_RESOLVER_UNAVAILABLE", "镜像启动命令解析器未初始化", nil)
 	}
 
-	defaultCommand, err := l.svcCtx.ImageCommandResolver.ResolveCommand(l.ctx, req.CustomConfiguration.Image)
-	if err != nil {
-		l.Errorf("resolve default image command failed")
-		if errors.Is(err, registrycommand.ErrRegistryNotAllowed) {
-			return rejectedResponse("IMAGE_REGISTRY_NOT_ALLOWED", "镜像仓库不在允许列表中", ""), nil
+	defaultCommand := config.DefaultSandboxCommand()
+	if len(defaultCommand) == 0 {
+		defaultCommand, err = l.svcCtx.ImageCommandResolver.ResolveCommand(l.ctx, req.CustomConfiguration.Image)
+		if err != nil {
+			l.Errorf("resolve default image command failed")
+			if errors.Is(err, registrycommand.ErrRegistryNotAllowed) {
+				return rejectedResponse("IMAGE_REGISTRY_NOT_ALLOWED", "镜像仓库不在允许列表中", ""), nil
+			}
+			return rejectedResponse("IMAGE_COMMAND_RESOLVE_FAILED", "获取镜像默认启动命令失败", ""), nil
 		}
-		return rejectedResponse("IMAGE_COMMAND_RESOLVE_FAILED", "获取镜像默认启动命令失败", ""), nil
 	}
 
 	effectiveRequest := *req
@@ -91,74 +93,7 @@ func (l *CreateSandboxToolLogic) CreateSandboxTool(req *types.CreateSandboxToolR
 		ToolId:    toolID,
 		RequestId: requestID,
 	}
-
-	l.waitForToolStatus(result)
 	return result, nil
-}
-
-// 查询沙箱工具的状态
-func (l *CreateSandboxToolLogic) waitForToolStatus(result *types.CreateSandboxToolResponse) {
-	pollCtx, cancel := withOptionalTimeout(l.ctx, l.svcCtx.Config.TencentCloud.StatusPollTimeout)
-	defer cancel()
-
-	interval := l.svcCtx.Config.TencentCloud.StatusPollInterval
-	if interval <= 0 {
-		interval = time.Second
-	}
-	queriedSuccessfully := false
-	var lastErr error
-
-	for {
-		tool, err := l.describeTool(pollCtx, result.ToolId)
-		if err != nil {
-			lastErr = err
-		} else {
-			queriedSuccessfully = true
-			lastErr = nil
-			if tool.Status != nil && strings.TrimSpace(*tool.Status) != "" {
-				result.Status = strings.ToUpper(strings.TrimSpace(*tool.Status))
-			}
-			if tool.StatusReason != nil {
-				result.StatusReason = strings.TrimSpace(*tool.StatusReason)
-			}
-			if result.Status == "ACTIVE" {
-				return
-			}
-			if result.Status == "FAILED" {
-				result.ErrorCode = "CREATE_SANDBOX_TOOL_FAILED"
-				result.ErrorMessage = result.StatusReason
-				if result.ErrorMessage == "" {
-					result.ErrorMessage = "腾讯云沙箱工具创建失败"
-				}
-				return
-			}
-		}
-
-		timer := time.NewTimer(interval)
-		select {
-		case <-pollCtx.Done():
-			timer.Stop()
-			if !queriedSuccessfully && lastErr != nil {
-				result.ErrorCode = "STATUS_QUERY_FAILED"
-				result.ErrorMessage = "沙箱工具已提交创建，但查询状态失败: " + lastErr.Error()
-			}
-			return
-		case <-timer.C:
-		}
-	}
-}
-
-func (l *CreateSandboxToolLogic) describeTool(ctx context.Context, toolID string) (*tcags.SandboxTool, error) {
-	request := tcags.NewDescribeSandboxToolListRequest()
-	request.ToolIds = []*string{stringPtr(toolID)}
-	response, err := l.svcCtx.SandboxToolClient.DescribeSandboxToolListWithContext(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("describe sandbox tool: %w", err)
-	}
-	if response == nil || response.Response == nil || len(response.Response.SandboxToolSet) == 0 || response.Response.SandboxToolSet[0] == nil {
-		return nil, fmt.Errorf("describe sandbox tool returned no matching tool")
-	}
-	return response.Response.SandboxToolSet[0], nil
 }
 
 func createErrorResponse(err error) *types.CreateSandboxToolResponse {

@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/zeromicro/go-zero/core/conf"
 )
 
 func TestConfigLoadsValuesFromFile(t *testing.T) {
@@ -33,8 +31,6 @@ TencentCloud:
   Region: file-region
   Endpoint: file.tencentcloud.example.com
   RequestTimeout: 10s
-  StatusPollInterval: 5s
-  StatusPollTimeout: 20s
 
 ImageSync:
   Endpoint: https://file.example.com/sync
@@ -56,9 +52,9 @@ Registry:
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	var config Config
-	if err := conf.Load(configFile, &config); err != nil {
-		t.Fatalf("conf.Load() error = %v", err)
+	config, err := Load(configFile)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
 	}
 	if config.TencentCloud.SecretID != "file-secret-id" || config.TencentCloud.SecretKey != "file-secret-key" {
 		t.Fatalf("TencentCloud credentials were not loaded from file: %#v", config.TencentCloud)
@@ -69,9 +65,7 @@ Registry:
 	if config.Timeout != 30000 {
 		t.Fatalf("REST Timeout = %d", config.Timeout)
 	}
-	if config.TencentCloud.RequestTimeout != 10*time.Second ||
-		config.TencentCloud.StatusPollInterval != 5*time.Second ||
-		config.TencentCloud.StatusPollTimeout != 20*time.Second {
+	if config.TencentCloud.RequestTimeout != 10*time.Second {
 		t.Fatalf("unexpected TencentCloud timeouts: %#v", config.TencentCloud)
 	}
 	if config.ImageSync.Endpoint != "https://file.example.com/sync" || config.ImageSync.MaxAttempts != 3 || config.ImageSync.AttemptTimeout != time.Second {
@@ -85,5 +79,54 @@ Registry:
 	}
 	if config.Registry.RequestTimeout != 10*time.Second {
 		t.Fatalf("Registry.RequestTimeout = %s", config.Registry.RequestTimeout)
+	}
+}
+
+func TestLoadAppliesCentralDefaults(t *testing.T) {
+	const data = `Name: cube_sandbox_image_server-api
+Host: 127.0.0.1
+Port: 43999
+Timeout: 30000
+
+TencentCloud:
+  SecretID: file-secret-id
+  SecretKey: file-secret-key
+
+Registry:
+  Username: file-registry-user
+  Password: file-registry-password
+`
+	configFile := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(configFile, []byte(data), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	got, err := Load(configFile)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.TencentCloud.Region != DefaultTencentCloudRegion || got.TencentCloud.Endpoint != DefaultTencentCloudEndpoint || got.TencentCloud.RequestTimeout != DefaultTencentCloudRequestTimeout {
+		t.Fatalf("TencentCloud defaults = %#v", got.TencentCloud)
+	}
+	if got.ImageSync.Endpoint != DefaultImageSyncEndpoint || got.ImageSync.RequestTimeout != DefaultImageSyncRequestTimeout || got.ImageSync.AttemptTimeout != DefaultImageSyncAttemptTimeout {
+		t.Fatalf("ImageSync defaults = %#v", got.ImageSync)
+	}
+	if got.ImageSync.MaxResponseBytes != DefaultImageSyncMaxResponseBytes || got.ImageSync.MaxAttempts != DefaultImageSyncMaxAttempts || got.ImageSync.RetryInterval != DefaultImageSyncRetryInterval {
+		t.Fatalf("ImageSync retry defaults = %#v", got.ImageSync)
+	}
+	if len(got.Registry.AllowedHosts) != 1 || got.Registry.AllowedHosts[0] != DefaultRegistryAllowedHost || got.Registry.RequestTimeout != DefaultRegistryRequestTimeout {
+		t.Fatalf("Registry defaults = %#v", got.Registry)
+	}
+}
+
+func TestDefaultSandboxCommandReturnsEmptyList(t *testing.T) {
+	command := DefaultSandboxCommand()
+	if command == nil || len(command) != 0 {
+		t.Fatalf("DefaultSandboxCommand() = %#v, want non-nil empty list", command)
+	}
+
+	command = append(command, "override")
+	if got := DefaultSandboxCommand(); got == nil || len(got) != 0 {
+		t.Fatalf("DefaultSandboxCommand() after caller mutation = %#v", got)
 	}
 }

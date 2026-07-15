@@ -11,13 +11,11 @@ func TestValidateConfig(t *testing.T) {
 	valid := func() config.Config {
 		return config.Config{
 			TencentCloud: config.TencentCloudConfig{
-				SecretID:           "secret-id",
-				SecretKey:          "secret-key",
-				Region:             "ap-shanghai",
-				Endpoint:           "ags.tencentcloudapi.com",
-				RequestTimeout:     10 * time.Second,
-				StatusPollInterval: 5 * time.Second,
-				StatusPollTimeout:  20 * time.Second,
+				SecretID:       "secret-id",
+				SecretKey:      "secret-key",
+				Region:         "ap-shanghai",
+				Endpoint:       "ags.tencentcloudapi.com",
+				RequestTimeout: 10 * time.Second,
 			},
 			ImageSync: config.ImageSyncConfig{
 				RequestTimeout: 20 * time.Second,

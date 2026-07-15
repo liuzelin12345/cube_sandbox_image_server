@@ -186,11 +186,9 @@
                     },
                     "imageRegistryType": {
                       "type": "string",
-                      "default": "enterprise",
                       "enum": [
                         "[enterprise"
-                      ],
-                      "example": "enterprise"
+                      ]
                     },
                     "ports": {
                       "type": "array",
@@ -221,52 +219,36 @@
                       "type": "object",
                       "properties": {
                         "failureThreshold": {
-                          "type": "integer",
-                          "default": 100,
-                          "example": 100
+                          "type": "integer"
                         },
                         "httpGet": {
                           "type": "object",
                           "properties": {
                             "path": {
-                              "type": "string",
-                              "default": "/health",
-                              "example": "/health"
+                              "type": "string"
                             },
                             "port": {
-                              "type": "integer",
-                              "default": 49999,
-                              "example": 49999
+                              "type": "integer"
                             },
                             "scheme": {
                               "type": "string",
-                              "default": "HTTP",
                               "enum": [
                                 "[HTTP"
-                              ],
-                              "example": "HTTP"
+                              ]
                             }
                           }
                         },
                         "probePeriodMs": {
-                          "type": "integer",
-                          "default": 1000,
-                          "example": 1000
+                          "type": "integer"
                         },
                         "probeTimeoutMs": {
-                          "type": "integer",
-                          "default": 1000,
-                          "example": 1000
+                          "type": "integer"
                         },
                         "readyTimeoutMs": {
-                          "type": "integer",
-                          "default": 30000,
-                          "example": 30000
+                          "type": "integer"
                         },
                         "successThreshold": {
-                          "type": "integer",
-                          "default": 1,
-                          "example": 1
+                          "type": "integer"
                         }
                       }
                     },
@@ -274,23 +256,17 @@
                       "type": "object",
                       "properties": {
                         "cpu": {
-                          "type": "string",
-                          "default": "1",
-                          "example": "1"
+                          "type": "string"
                         },
                         "memory": {
-                          "type": "string",
-                          "default": "2Gi",
-                          "example": "2Gi"
+                          "type": "string"
                         }
                       }
                     }
                   }
                 },
                 "defaultTimeout": {
-                  "type": "string",
-                  "default": "5m",
-                  "example": "5m"
+                  "type": "string"
                 },
                 "description": {
                   "type": "string"
@@ -300,11 +276,9 @@
                   "properties": {
                     "networkMode": {
                       "type": "string",
-                      "default": "PUBLIC",
                       "enum": [
                         "[PUBLIC"
-                      ],
-                      "example": "PUBLIC"
+                      ]
                     },
                     "vpcConfig": {
                       "type": "object",
@@ -326,14 +300,46 @@
                   }
                 },
                 "persistent": {
-                  "type": "boolean",
-                  "default": false,
-                  "example": false
+                  "type": "boolean"
                 },
                 "roleArn": {
-                  "type": "string",
-                  "default": "qcs::cam::uin/100032159895:roleName/sandbox_test",
-                  "example": "qcs::cam::uin/100032159895:roleName/sandbox_test"
+                  "type": "string"
+                },
+                "storageMounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "mountPath": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "readOnly": {
+                        "type": "boolean"
+                      },
+                      "storageSource": {
+                        "type": "object",
+                        "properties": {
+                          "cos": {
+                            "type": "object",
+                            "properties": {
+                              "bucketName": {
+                                "type": "string"
+                              },
+                              "bucketPath": {
+                                "type": "string"
+                              },
+                              "endpoint": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
                 },
                 "tags": {
                   "type": "array",
@@ -393,6 +399,48 @@
         }
       }
     },
+    "/api/v1/sandbox/tools/status": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "https"
+        ],
+        "summary": "查询腾讯云自定义沙箱工具状态",
+        "operationId": "cubeSandboxImageGetSandboxToolStatusHandler",
+        "parameters": [
+          {
+            "type": "string",
+            "name": "toolId",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "statusReason": {
+                  "type": "string"
+                },
+                "toolId": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/readiness": {
       "get": {
         "produces": [
@@ -412,7 +460,7 @@
       }
     }
   },
-  "x-date": "2026-07-15 14:10:45",
+  "x-date": "2026-07-15 20:33:00",
   "x-description": "This is a goctl generated swagger file.",
   "x-github": "https://github.com/zeromicro/go-zero",
   "x-go-zero-doc": "https://go-zero.dev/",

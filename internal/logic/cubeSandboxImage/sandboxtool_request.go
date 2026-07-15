@@ -10,17 +10,11 @@ import (
 
 	tcags "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ags/v20250920"
 
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/config"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/types"
 )
 
 var toolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,50}$`)
-
-const (
-	defaultToolTimeout = "5m"
-	defaultRoleARN     = "qcs::cam::uin/100032159895:roleName/sandbox_test"
-	defaultProbePath   = "/health"
-	defaultProbePort   = int64(49999)
-)
 
 func buildCreateSandboxToolRequest(input *types.CreateSandboxToolRequest) (*tcags.CreateSandboxToolRequest, error) {
 	if input == nil {
@@ -31,15 +25,23 @@ func buildCreateSandboxToolRequest(input *types.CreateSandboxToolRequest) (*tcag
 	if !toolNamePattern.MatchString(toolName) {
 		return nil, fmt.Errorf("toolName must contain 1-50 letters, digits, underscores, or hyphens")
 	}
-	if utf8.RuneCountInString(input.Description) > 200 {
+	description := strings.TrimSpace(input.Description)
+	if description == "" {
+		description = config.DefaultSandboxDescription
+	}
+	if utf8.RuneCountInString(description) > 200 {
 		return nil, fmt.Errorf("description cannot exceed 200 characters")
 	}
-	if utf8.RuneCountInString(input.ClientToken) > 64 {
+	clientToken := strings.TrimSpace(input.ClientToken)
+	if clientToken == "" {
+		clientToken = config.DefaultSandboxClientToken
+	}
+	if utf8.RuneCountInString(clientToken) > 64 {
 		return nil, fmt.Errorf("clientToken cannot exceed 64 characters")
 	}
 	defaultTimeout := strings.TrimSpace(input.DefaultTimeout)
 	if defaultTimeout == "" {
-		defaultTimeout = defaultToolTimeout
+		defaultTimeout = config.DefaultSandboxToolTimeout
 	}
 	if err := validateDefaultTimeout(defaultTimeout); err != nil {
 		return nil, err
@@ -47,7 +49,7 @@ func buildCreateSandboxToolRequest(input *types.CreateSandboxToolRequest) (*tcag
 
 	roleARN := strings.TrimSpace(input.RoleArn)
 	if roleARN == "" {
-		roleARN = defaultRoleARN
+		roleARN = config.DefaultSandboxRoleARN
 	}
 
 	network, err := buildNetworkConfiguration(input.NetworkConfiguration)
@@ -62,20 +64,97 @@ func buildCreateSandboxToolRequest(input *types.CreateSandboxToolRequest) (*tcag
 	if err != nil {
 		return nil, err
 	}
+	storageMounts, err := buildStorageMounts(input.StorageMounts)
+	if err != nil {
+		return nil, err
+	}
 
 	request := tcags.NewCreateSandboxToolRequest()
 	request.ToolName = stringPtr(toolName)
 	request.ToolType = stringPtr("custom")
 	request.RoleArn = stringPtr(roleARN)
-	request.Persistent = boolPtr(input.Persistent)
+	request.Persistent = boolPtr(boolValueOrDefault(input.Persistent, config.DefaultSandboxPersistent))
 	request.NetworkConfiguration = network
 	request.CustomConfiguration = custom
 	request.Tags = tags
-	request.Description = optionalString(input.Description)
+	request.StorageMounts = storageMounts
+	request.Description = optionalString(description)
 	request.DefaultTimeout = stringPtr(defaultTimeout)
-	request.ClientToken = optionalString(input.ClientToken)
+	request.ClientToken = optionalString(clientToken)
 
 	return request, nil
+}
+
+func buildStorageMounts(input []types.StorageMount) ([]*tcags.StorageMount, error) {
+	if len(input) == 0 {
+		return nil, nil
+	}
+
+	result := make([]*tcags.StorageMount, 0, len(input))
+	names := make(map[string]struct{}, len(input))
+	mountPaths := make(map[string]struct{}, len(input))
+	for index, mount := range input {
+		name, err := storageValueOrDefault(mount.Name, config.DefaultSandboxStorageMountName, fmt.Sprintf("storageMounts[%d].name", index))
+		if err != nil {
+			return nil, err
+		}
+		endpoint, err := storageValueOrDefault(mount.StorageSource.Cos.Endpoint, config.DefaultSandboxCOSEndpoint, fmt.Sprintf("storageMounts[%d].storageSource.cos.endpoint", index))
+		if err != nil {
+			return nil, err
+		}
+		bucketName, err := storageValueOrDefault(mount.StorageSource.Cos.BucketName, config.DefaultSandboxCOSBucketName, fmt.Sprintf("storageMounts[%d].storageSource.cos.bucketName", index))
+		if err != nil {
+			return nil, err
+		}
+		bucketPath, err := storageValueOrDefault(mount.StorageSource.Cos.BucketPath, config.DefaultSandboxCOSBucketPath, fmt.Sprintf("storageMounts[%d].storageSource.cos.bucketPath", index))
+		if err != nil {
+			return nil, err
+		}
+		mountPath, err := storageValueOrDefault(mount.MountPath, config.DefaultSandboxStorageMountPath, fmt.Sprintf("storageMounts[%d].mountPath", index))
+		if err != nil {
+			return nil, err
+		}
+		if !strings.HasPrefix(bucketPath, "/") {
+			return nil, fmt.Errorf("storageMounts[%d].storageSource.cos.bucketPath must be an absolute path", index)
+		}
+		if !strings.HasPrefix(mountPath, "/") {
+			return nil, fmt.Errorf("storageMounts[%d].mountPath must be an absolute path", index)
+		}
+		if _, ok := names[name]; ok {
+			return nil, fmt.Errorf("storageMounts contains duplicate name %q", name)
+		}
+		if _, ok := mountPaths[mountPath]; ok {
+			return nil, fmt.Errorf("storageMounts contains duplicate mountPath %q", mountPath)
+		}
+		names[name] = struct{}{}
+		mountPaths[mountPath] = struct{}{}
+
+		result = append(result, &tcags.StorageMount{
+			Name: stringPtr(name),
+			StorageSource: &tcags.StorageSource{
+				Cos: &tcags.CosStorageSource{
+					Endpoint:   stringPtr(endpoint),
+					BucketName: stringPtr(bucketName),
+					BucketPath: stringPtr(bucketPath),
+				},
+			},
+			MountPath: stringPtr(mountPath),
+			ReadOnly:  boolPtr(boolValueOrDefault(mount.ReadOnly, config.DefaultSandboxStorageReadOnly)),
+		})
+	}
+
+	return result, nil
+}
+
+func storageValueOrDefault(value, defaultValue, field string) (string, error) {
+	if value == "" {
+		return defaultValue, nil
+	}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", fmt.Errorf("%s is required", field)
+	}
+	return trimmed, nil
 }
 
 func validateDefaultTimeout(raw string) error {
@@ -96,7 +175,7 @@ func validateDefaultTimeout(raw string) error {
 func buildNetworkConfiguration(input types.NetworkConfiguration) (*tcags.NetworkConfiguration, error) {
 	mode := strings.ToUpper(strings.TrimSpace(input.NetworkMode))
 	if mode == "" {
-		mode = "PUBLIC"
+		mode = config.DefaultSandboxNetworkMode
 	}
 	if mode != "PUBLIC" && mode != "VPC" && mode != "SANDBOX" {
 		return nil, fmt.Errorf("networkMode must be PUBLIC, VPC, or SANDBOX")
@@ -110,14 +189,22 @@ func buildNetworkConfiguration(input types.NetworkConfiguration) (*tcags.Network
 		return configuration, nil
 	}
 
-	subnets, err := nonEmptyStringPointers("vpcConfig.subnetIds", input.VpcConfig.SubnetIds)
+	subnetIDs := input.VpcConfig.SubnetIds
+	if len(subnetIDs) == 0 {
+		subnetIDs = []string{config.DefaultSandboxVPCSubnetID}
+	}
+	subnets, err := nonEmptyStringPointers("vpcConfig.subnetIds", subnetIDs)
 	if err != nil {
 		return nil, err
 	}
 	if len(subnets) == 0 {
 		return nil, fmt.Errorf("vpcConfig.subnetIds is required when networkMode is VPC")
 	}
-	securityGroups, err := nonEmptyStringPointers("vpcConfig.securityGroupIds", input.VpcConfig.SecurityGroupIds)
+	securityGroupIDs := input.VpcConfig.SecurityGroupIds
+	if len(securityGroupIDs) == 0 {
+		securityGroupIDs = []string{config.DefaultSandboxSecurityGroupID}
+	}
+	securityGroups, err := nonEmptyStringPointers("vpcConfig.securityGroupIds", securityGroupIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +224,7 @@ func buildCustomConfiguration(input types.CustomConfiguration) (*tcags.CustomCon
 
 	registryType := strings.ToLower(strings.TrimSpace(input.ImageRegistryType))
 	if registryType == "" {
-		registryType = "enterprise"
+		registryType = config.DefaultSandboxImageRegistryType
 	}
 	if registryType != "enterprise" && registryType != "personal" {
 		return nil, fmt.Errorf("customConfiguration.imageRegistryType must be enterprise or personal")
@@ -179,11 +266,11 @@ func buildCustomConfiguration(input types.CustomConfiguration) (*tcags.CustomCon
 	}
 	cpu := strings.TrimSpace(input.Resources.CPU)
 	if cpu == "" {
-		cpu = "1"
+		cpu = config.DefaultSandboxCPU
 	}
 	memory := strings.TrimSpace(input.Resources.Memory)
 	if memory == "" {
-		memory = "2Gi"
+		memory = config.DefaultSandboxMemory
 	}
 	configuration.Resources = &tcags.ResourceConfiguration{
 		CPU:    stringPtr(cpu),
@@ -232,9 +319,9 @@ func buildEnvironment(input []types.EnvironmentVariable) ([]*tcags.EnvVar, error
 func buildPorts(input []types.PortConfiguration) ([]*tcags.PortConfiguration, error) {
 	if len(input) == 0 {
 		input = []types.PortConfiguration{{
-			Name:     "http",
-			Protocol: "TCP",
-			Port:     defaultProbePort,
+			Name:     config.DefaultSandboxPortName,
+			Protocol: config.DefaultSandboxPortProtocol,
+			Port:     config.DefaultSandboxPort,
 		}}
 	}
 	result := make([]*tcags.PortConfiguration, 0, len(input))
@@ -273,43 +360,43 @@ func buildPorts(input []types.PortConfiguration) ([]*tcags.PortConfiguration, er
 func buildProbe(input types.ProbeConfiguration) (*tcags.ProbeConfiguration, error) {
 	path := strings.TrimSpace(input.HttpGet.Path)
 	if path == "" {
-		path = defaultProbePath
+		path = config.DefaultSandboxProbePath
 	}
 	if !strings.HasPrefix(path, "/") {
 		return nil, fmt.Errorf("customConfiguration.probe.httpGet.path must start with /")
 	}
 	port := input.HttpGet.Port
 	if port == 0 {
-		port = defaultProbePort
+		port = config.DefaultSandboxProbePort
 	}
 	if err := validatePort(port, "customConfiguration.probe.httpGet.port"); err != nil {
 		return nil, err
 	}
 	scheme := strings.ToUpper(strings.TrimSpace(input.HttpGet.Scheme))
 	if scheme == "" {
-		scheme = "HTTP"
+		scheme = config.DefaultSandboxProbeScheme
 	}
 	if scheme != "HTTP" && scheme != "HTTPS" {
 		return nil, fmt.Errorf("customConfiguration.probe.httpGet.scheme must be HTTP or HTTPS")
 	}
 
-	readyTimeout, err := positiveOrDefault(input.ReadyTimeoutMs, 30000, "customConfiguration.probe.readyTimeoutMs")
+	readyTimeout, err := positiveOrDefault(input.ReadyTimeoutMs, config.DefaultSandboxReadyTimeoutMs, "customConfiguration.probe.readyTimeoutMs")
 	if err != nil {
 		return nil, err
 	}
-	probeTimeout, err := positiveOrDefault(input.ProbeTimeoutMs, 1000, "customConfiguration.probe.probeTimeoutMs")
+	probeTimeout, err := positiveOrDefault(input.ProbeTimeoutMs, config.DefaultSandboxProbeTimeoutMs, "customConfiguration.probe.probeTimeoutMs")
 	if err != nil {
 		return nil, err
 	}
-	period, err := positiveOrDefault(input.ProbePeriodMs, 1000, "customConfiguration.probe.probePeriodMs")
+	period, err := positiveOrDefault(input.ProbePeriodMs, config.DefaultSandboxProbePeriodMs, "customConfiguration.probe.probePeriodMs")
 	if err != nil {
 		return nil, err
 	}
-	successThreshold, err := positiveOrDefault(input.SuccessThreshold, 1, "customConfiguration.probe.successThreshold")
+	successThreshold, err := positiveOrDefault(input.SuccessThreshold, config.DefaultSandboxSuccessThreshold, "customConfiguration.probe.successThreshold")
 	if err != nil {
 		return nil, err
 	}
-	failureThreshold, err := positiveOrDefault(input.FailureThreshold, 100, "customConfiguration.probe.failureThreshold")
+	failureThreshold, err := positiveOrDefault(input.FailureThreshold, config.DefaultSandboxFailureThreshold, "customConfiguration.probe.failureThreshold")
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +483,13 @@ func optionalString(value string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func boolValueOrDefault(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }
 
 func stringPtr(value string) *string { return &value }

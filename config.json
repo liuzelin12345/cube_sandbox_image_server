@@ -1,0 +1,61 @@
+{
+  "toolName": "aime-agent-v35-auto-snapshot",
+  "description": "custom sandbox tool",
+  "defaultTimeout": "5m",
+  "clientToken": "",
+  "roleArn": "qcs::cam::uin/100012162316:roleName/aime-ags",
+  "persistent": false,
+  "tags": [],
+  "networkConfiguration": {
+    "networkMode": "VPC",
+    "vpcConfig": {
+      "subnetIds": [
+        "subnet-21t3qpcr"
+      ],
+      "securityGroupIds": [
+        "sg-nkwdhmgy"
+      ]
+    }
+  },
+  "storageMounts": [
+    {
+      "name": "aime-agent-harness",
+      "storageSource": {
+        "cos": {
+          "endpoint": "aime-agent-cos-1300730068.cos.ap-shanghai.myqcloud.com",
+          "bucketName": "aime-agent-cos-1300730068",
+          "bucketPath": "/"
+        }
+      },
+      "mountPath": "/mnt/cos",
+      "readOnly": false
+    }
+  ],
+  "customConfiguration": {
+    "image": "aime-agent-tcr.tencentcloudcr.com/ths/aime-harness-sandbox-image:1.0.0.35-20260715204154.liziyue.73a8b2d1.35.sandboximage-lzy-domestic",
+    "imageRegistryType": "enterprise",
+    "ports": [
+      {
+        "name": "envd",
+        "protocol": "TCP",
+        "port": 49983
+      }
+    ],
+    "resources": {
+      "cpu": "0.5",
+      "memory": "1Gi"
+    },
+    "probe": {
+      "httpGet": {
+        "path": "/health",
+        "port": 49999,
+        "scheme": "HTTP"
+      },
+      "readyTimeoutMs": 30000,
+      "probeTimeoutMs": 1000,
+      "probePeriodMs": 300,
+      "successThreshold": 1,
+      "failureThreshold": 100
+    }
+  }
+}

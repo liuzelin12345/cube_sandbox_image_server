@@ -5,6 +5,7 @@ CONFIG_EXAMPLE := etc/cubesandboximageserver-api.example.yaml
 
 api:
 	go tool goctl api go -api cube_sandbox_image_server.api -dir .
+	go tool goctl api swagger -api cube_sandbox_image_server.api -dir . -filename yapi
 
 api-validate:
 	go tool goctl api validate --api cube_sandbox_image_server.api
