@@ -8,6 +8,7 @@
 
 - `POST /api/v1/sandbox/tools`：先通过镜像 Registry V2 API 读取默认启动命令，再调用腾讯云 AGS SDK 创建自定义沙箱工具。接口在获得 `ToolId` 后会轮询状态，返回 `ACTIVE`、`FAILED` 或超时时的最后已知状态。
 - `GET /api/v1/images/sync`：将 `srcHub`、`dstHub`、`group`、`image`、`tag` 安全编码为查询参数，请求内部镜像同步服务并原样映射业务响应。
+- `GET /readiness`：Kubernetes Readiness 探针，服务正常运行时直接返回 HTTP 200 和空响应体，不访问腾讯云、Registry 或镜像同步服务。
 
 镜像同步客户端仅对网络错误、HTTP 429 和 5xx 进行有限次数重试，并具有单次超时、总超时和响应体大小上限。创建工具不会盲目重试，避免未设置 `clientToken` 时重复创建。
 

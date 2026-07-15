@@ -170,3 +170,12 @@ service cube_sandbox_image_server-api {
 	get /images/sync (SyncImageRequest) returns (SyncImageResponse)
 }
 
+@server (
+	group: health
+)
+service cube_sandbox_image_server-api {
+	@doc "Kubernetes Readiness 探针"
+	@handler ReadinessHandler
+	get /readiness
+}
+

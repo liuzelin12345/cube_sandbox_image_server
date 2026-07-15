@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	cubeSandboxImage "github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/handler/cubeSandboxImage"
+	health "github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/handler/health"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -29,5 +30,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 		},
 		rest.WithPrefix("/api/v1"),
+	)
+
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				// Kubernetes Readiness 探针
+				Method:  http.MethodGet,
+				Path:    "/readiness",
+				Handler: health.ReadinessHandler(serverCtx),
+			},
+		},
 	)
 }
