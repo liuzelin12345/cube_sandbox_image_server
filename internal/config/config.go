@@ -19,12 +19,13 @@ type TencentCloudConfig struct {
 }
 
 type ImageSyncConfig struct {
-	Endpoint         string        `json:",optional"`
-	RequestTimeout   time.Duration `json:",optional"`
-	AttemptTimeout   time.Duration `json:",optional"`
-	MaxResponseBytes int64         `json:",optional"`
-	MaxAttempts      int           `json:",optional,range=[1:10]"`
-	RetryInterval    time.Duration `json:",optional"`
+	Endpoint          string `json:",optional"`
+	AllowedImageNames []string
+	RequestTimeout    time.Duration `json:",optional"`
+	AttemptTimeout    time.Duration `json:",optional"`
+	MaxResponseBytes  int64         `json:",optional"`
+	MaxAttempts       int           `json:",optional,range=[1:10]"`
+	RetryInterval     time.Duration `json:",optional"`
 }
 
 type RegistryConfig struct {

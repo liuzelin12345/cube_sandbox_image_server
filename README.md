@@ -168,6 +168,12 @@ curl -sS --get 'http://127.0.0.1:43999/api/v1/images/sync' \
   --data-urlencode 'tag=1.0.0.46-20260617190922.liziyue.36c86c4e.46.cubesandbox-image'
 ```
 
+`image` 参数必须与 `ImageSync.AllowedImageNames` 中的一个镜像名完全一致。匹配时不包含 `srcHub`、`group` 和 `tag`，并区分大小写。不在白名单中的请求返回 HTTP 403：
+
+```json
+{"code":"IMAGE_NOT_ALLOWED","message":"镜像名不在同步白名单中"}
+```
+
 ### 查询工具状态
 
 创建接口返回 `toolId` 后，可查询一次当前状态：
@@ -213,6 +219,7 @@ make config
 | `TencentCloud.Endpoint` | `ags.tencentcloudapi.com` | AGS API 地址 |
 | `TencentCloud.RequestTimeout` | `60s` | 创建工具或查询工具状态时，单次腾讯云 SDK 调用的超时 |
 | `ImageSync.Endpoint` | `http://172.20.208.115/sync/image` | 镜像同步服务地址 |
+| `ImageSync.AllowedImageNames` | `aime-sandbox-light-server`<br>`aime-harness-sandbox-image` | `/images/sync` 允许同步的镜像名白名单，至少配置一个非空值 |
 | `ImageSync.RequestTimeout` | `600s` | `/images/sync` 整个同步流程的总超时，包含所有尝试和重试等待 |
 | `ImageSync.AttemptTimeout` | `300s` | 每次上游 HTTP 请求的超时，包含连接、等待响应和读取响应体 |
 | `ImageSync.MaxResponseBytes` | `1048576` | 上游响应体上限，即 1 MiB |
@@ -222,7 +229,7 @@ make config
 | `Registry.Password` | 必填，无默认值 | Registry 认证密码 |
 | `Registry.RequestTimeout` | `10s` | 从 Registry 解析镜像 Entrypoint/Cmd 的总超时 |
 
-旧的私有运行配置必须增加 `Auth.APIKeys` 后才能启动。仓库中的示例只包含占位值；当前本地私有 YAML 已写入与 Shell 一致的随机 Key。真实 Key 同时存在于受 Git 跟踪的 Shell 中，如果不希望共享该 Key，提交前应重新生成并同步更新本地 YAML。
+旧的私有运行配置必须增加 `Auth.APIKeys` 和 `ImageSync.AllowedImageNames` 后才能启动。仓库中的示例只包含占位 API Key；当前本地私有 YAML 已写入与 Shell 一致的随机 Key。真实 Key 同时存在于受 Git 跟踪的 Shell 中，如果不希望共享该 Key，提交前应重新生成并同步更新本地 YAML。
 
 `TencentCloud.StatusPollInterval` 和 `TencentCloud.StatusPollTimeout` 是历史字段。如果旧的私有配置中仍然保留这两项，当前配置结构也不会读取，服务端不再自动轮询。工具状态由调用方通过 `GET /api/v1/sandbox/tools/status` 按需查询。
 

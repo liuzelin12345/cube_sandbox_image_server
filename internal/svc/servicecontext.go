@@ -119,6 +119,21 @@ func validateConfig(c config.Config) error {
 	if c.ImageSync.AttemptTimeout <= 0 {
 		return fmt.Errorf("ImageSync.AttemptTimeout must be greater than zero")
 	}
+	if len(c.ImageSync.AllowedImageNames) == 0 {
+		return fmt.Errorf("ImageSync.AllowedImageNames must contain at least one image name")
+	}
+	for index, imageName := range c.ImageSync.AllowedImageNames {
+		trimmed := strings.TrimSpace(imageName)
+		if trimmed == "" {
+			return fmt.Errorf("ImageSync.AllowedImageNames[%d] is required", index)
+		}
+		if trimmed != imageName {
+			return fmt.Errorf("ImageSync.AllowedImageNames[%d] must not contain surrounding whitespace", index)
+		}
+		if len(imageName) > 1024 {
+			return fmt.Errorf("ImageSync.AllowedImageNames[%d] cannot exceed 1024 bytes", index)
+		}
+	}
 	if strings.TrimSpace(c.Registry.Username) == "" {
 		return fmt.Errorf("Registry.Username is required")
 	}

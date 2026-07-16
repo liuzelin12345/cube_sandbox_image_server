@@ -16,6 +16,9 @@ TencentCloud:
 
 ImageSync:
   Endpoint: http://172.20.208.115/sync/image
+  AllowedImageNames:
+    - aime-sandbox-light-server
+    - aime-harness-sandbox-image
   RequestTimeout: 600s
   AttemptTimeout: 300s
   MaxResponseBytes: 1048576

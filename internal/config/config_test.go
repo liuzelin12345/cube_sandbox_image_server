@@ -39,6 +39,9 @@ TencentCloud:
 
 ImageSync:
   Endpoint: https://file.example.com/sync
+  AllowedImageNames:
+    - image-one
+    - team/image-two
   RequestTimeout: 20s
   AttemptTimeout: 1s
   MaxResponseBytes: 1048576
@@ -77,6 +80,9 @@ Registry:
 	if config.ImageSync.Endpoint != "https://file.example.com/sync" || config.ImageSync.MaxAttempts != 3 || config.ImageSync.AttemptTimeout != time.Second {
 		t.Fatalf("unexpected ImageSync config: %#v", config.ImageSync)
 	}
+	if len(config.ImageSync.AllowedImageNames) != 2 || config.ImageSync.AllowedImageNames[0] != "image-one" || config.ImageSync.AllowedImageNames[1] != "team/image-two" {
+		t.Fatalf("ImageSync.AllowedImageNames = %#v", config.ImageSync.AllowedImageNames)
+	}
 	if config.Registry.Username != "file-registry-user" || config.Registry.Password != "file-registry-password" {
 		t.Fatalf("Registry credentials were not loaded from file: %#v", config.Registry)
 	}
@@ -99,6 +105,10 @@ TencentCloud:
   SecretID: file-secret-id
   SecretKey: file-secret-key
 
+ImageSync:
+  AllowedImageNames:
+    - image-one
+
 Registry:
   Username: file-registry-user
   Password: file-registry-password
@@ -120,6 +130,9 @@ Registry:
 	}
 	if got.ImageSync.MaxResponseBytes != DefaultImageSyncMaxResponseBytes || got.ImageSync.MaxAttempts != DefaultImageSyncMaxAttempts || got.ImageSync.RetryInterval != DefaultImageSyncRetryInterval {
 		t.Fatalf("ImageSync retry defaults = %#v", got.ImageSync)
+	}
+	if len(got.ImageSync.AllowedImageNames) != 1 || got.ImageSync.AllowedImageNames[0] != "image-one" {
+		t.Fatalf("ImageSync.AllowedImageNames = %#v", got.ImageSync.AllowedImageNames)
 	}
 	if got.Registry.RequestTimeout != DefaultRegistryRequestTimeout {
 		t.Fatalf("Registry defaults = %#v", got.Registry)

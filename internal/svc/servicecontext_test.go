@@ -19,8 +19,9 @@ func TestValidateConfig(t *testing.T) {
 				RequestTimeout: 10 * time.Second,
 			},
 			ImageSync: config.ImageSyncConfig{
-				RequestTimeout: 20 * time.Second,
-				AttemptTimeout: time.Second,
+				AllowedImageNames: []string{"image-one", "team/image-two"},
+				RequestTimeout:    20 * time.Second,
+				AttemptTimeout:    time.Second,
 			},
 			Registry: config.RegistryConfig{
 				Username:       "registry-user",
@@ -40,6 +41,9 @@ func TestValidateConfig(t *testing.T) {
 		{name: "API key with surrounding whitespace", mutate: func(c *config.Config) { c.Auth.APIKeys = []string{" api-key "} }, wantError: "Auth.APIKeys[0] must not contain surrounding whitespace"},
 		{name: "missing secret ID", mutate: func(c *config.Config) { c.TencentCloud.SecretID = "" }, wantError: "TencentCloud.SecretID is required"},
 		{name: "missing secret key", mutate: func(c *config.Config) { c.TencentCloud.SecretKey = " " }, wantError: "TencentCloud.SecretKey is required"},
+		{name: "missing allowed image names", mutate: func(c *config.Config) { c.ImageSync.AllowedImageNames = nil }, wantError: "ImageSync.AllowedImageNames must contain at least one image name"},
+		{name: "blank allowed image name", mutate: func(c *config.Config) { c.ImageSync.AllowedImageNames = []string{" "} }, wantError: "ImageSync.AllowedImageNames[0] is required"},
+		{name: "allowed image name with surrounding whitespace", mutate: func(c *config.Config) { c.ImageSync.AllowedImageNames = []string{" image-one "} }, wantError: "ImageSync.AllowedImageNames[0] must not contain surrounding whitespace"},
 		{name: "missing username", mutate: func(c *config.Config) { c.Registry.Username = "" }, wantError: "Registry.Username is required"},
 		{name: "missing password", mutate: func(c *config.Config) { c.Registry.Password = "\t" }, wantError: "Registry.Password is required"},
 		{name: "invalid timeout", mutate: func(c *config.Config) { c.Registry.RequestTimeout = 0 }, wantError: "Registry.RequestTimeout must be greater than zero"},
