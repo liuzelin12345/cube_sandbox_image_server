@@ -25,6 +25,11 @@ Host: 127.0.0.1
 Port: 43999
 Timeout: 30000
 
+Auth:
+  APIKeys:
+    - file-api-key-1
+    - file-api-key-2
+
 TencentCloud:
   SecretID: file-secret-id
   SecretKey: file-secret-key
@@ -65,6 +70,9 @@ Registry:
 	if config.Timeout != 30000 {
 		t.Fatalf("REST Timeout = %d", config.Timeout)
 	}
+	if len(config.Auth.APIKeys) != 2 || config.Auth.APIKeys[0] != "file-api-key-1" || config.Auth.APIKeys[1] != "file-api-key-2" {
+		t.Fatalf("Auth.APIKeys = %#v", config.Auth.APIKeys)
+	}
 	if config.TencentCloud.RequestTimeout != 10*time.Second {
 		t.Fatalf("unexpected TencentCloud timeouts: %#v", config.TencentCloud)
 	}
@@ -87,6 +95,10 @@ func TestLoadAppliesCentralDefaults(t *testing.T) {
 Host: 127.0.0.1
 Port: 43999
 Timeout: 30000
+
+Auth:
+  APIKeys:
+    - file-api-key
 
 TencentCloud:
   SecretID: file-secret-id

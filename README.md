@@ -11,6 +11,18 @@
 - `GET /api/v1/images/sync`：将 `srcHub`、`dstHub`、`group`、`image`、`tag` 安全编码为查询参数，请求内部镜像同步服务并原样映射业务响应。
 - `GET /readiness`：Kubernetes Readiness 探针，服务正常运行时直接返回 HTTP 200 和空响应体，不访问腾讯云、Registry 或镜像同步服务。
 
+### API Key 鉴权
+
+所有 `/api/v1` 业务接口都必须携带 `X-API-Key` 请求头，Key 由运行配置中的 `Auth.APIKeys` 列表提供。列表中的任意一个 Key 都可以通过鉴权，因此可以先增加新 Key、切换调用方，再删除旧 Key，实现平滑轮换。
+
+缺少或传入无效 Key 时，接口返回 HTTP 401：
+
+```json
+{"code":"UNAUTHORIZED","message":"缺少或无效的 API Key"}
+```
+
+`GET /readiness` 不需要 API Key，Kubernetes 探针可以继续直接访问。API Key 不应出现在日志、README 或提交到版本库的配置示例中。
+
 镜像同步客户端仅对网络错误、HTTP 429 和 5xx 进行有限次数重试，并具有单次超时、总超时和响应体大小上限。创建工具不会盲目重试，避免未设置 `clientToken` 时重复创建。
 
 ### `/api/v1/sandbox/tools` 请求参数
@@ -51,6 +63,7 @@
 
 ```bash
 curl -sS -X POST 'http://127.0.0.1:43999/api/v1/sandbox/tools' \
+  -H 'X-API-Key: replace-with-api-key' \
   -H 'Content-Type: application/json' \
   -d '{
     "toolName": "custom-sandbox-httpserver",
@@ -68,6 +81,7 @@ curl -sS -X POST 'http://127.0.0.1:43999/api/v1/sandbox/tools' \
 
 ```bash
 curl -sS -X POST 'http://127.0.0.1:43999/api/v1/sandbox/tools' \
+  -H 'X-API-Key: replace-with-api-key' \
   -H 'Content-Type: application/json' \
   -d '{
     "toolName": "custom-sandbox-full-demo",
@@ -146,6 +160,7 @@ VPC 模式下，`networkConfiguration` 需要改为：
 
 ```bash
 curl -sS --get 'http://127.0.0.1:43999/api/v1/images/sync' \
+  -H 'X-API-Key: replace-with-api-key' \
   --data-urlencode 'srcHub=hub-dev.hexin.cn:9544' \
   --data-urlencode 'dstHub=ths-shanghai-tcr.tencentcloudcr.com' \
   --data-urlencode 'group=ths' \
@@ -159,30 +174,21 @@ curl -sS --get 'http://127.0.0.1:43999/api/v1/images/sync' \
 
 ```bash
 curl -sS --get 'http://127.0.0.1:43999/api/v1/sandbox/tools/status' \
+  -H 'X-API-Key: replace-with-api-key' \
   --data-urlencode 'toolId=sdt-xxxxxxxx'
 ```
 
-项目根目录的 `sync_image_and_create_tool.sh` 会依次同步镜像、创建工具并持续查询状态，直到状态变为 `ACTIVE`、`FAILED` 或达到总超时。轮询参数可以通过环境变量调整：
-
-创建时需要在一行内输入完整的目标镜像地址，脚本会自动拆分 `dstHub`、`group`、`image` 和 `tag`：
-
-```text
-aime-agent-tcr.tencentcloudcr.com/ths/aime-harness-sandbox-image:1.0.0.29-20260715134613.liziyue.b60a92ef.29.sandboximage-lzy-domestic
-```
+项目根目录的 `sync_image_and_create_tool.sh` 提供 `sync`、`tool`、`watch` 和 `help` 子命令。脚本顶部已经写入与本地私有 YAML 一致的 API Key，默认访问 `http://127.0.0.1:43999`，运行时无需另外传入鉴权参数。`sync` 的镜像输入格式为 `<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>`，目标仓库由脚本顶部的 `DST_HUB` 补全。
 
 ```bash
-TOOL_STATUS_POLL_INTERVAL=5 \
-TOOL_STATUS_POLL_TIMEOUT=300 \
-./sync_image_and_create_tool.sh
+./sync_image_and_create_tool.sh sync [目标镜像路径]
+./sync_image_and_create_tool.sh tool [完整镜像地址] [工具名称]
+./sync_image_and_create_tool.sh tool --config <完整请求JSON文件>
+./sync_image_and_create_tool.sh watch [toolId] [超时秒]
+./sync_image_and_create_tool.sh help
 ```
 
-创建后中断监听时，可以根据已经返回的 `toolId` 单独恢复监听：
-
-```bash
-./sync_image_and_create_tool.sh watch sdt-xxxxxxxx 300
-```
-
-脚本不依赖 `jq`，状态轮询使用与 `cubesandbox-cli.sh` 相同的固定 `sleep` 间隔。
+`TOOL_STATUS_POLL_INTERVAL` 和 `TOOL_STATUS_POLL_TIMEOUT` 环境变量仍可调整轮询间隔和总超时。脚本不依赖 `jq`；鉴权失败时 `watch` 会立即退出，不会继续重试。PaaS 或其他部署环境必须单独配置自己的 `Auth.APIKeys`，本地生成的 Key 不会自动同步到远端。
 
 ## 配置
 
@@ -200,6 +206,7 @@ make config
 | `Host` | `0.0.0.0` | 监听所有网卡 |
 | `Port` | `43999` | HTTP 服务端口 |
 | `Timeout` | `600000` | go-zero HTTP 请求总超时，单位毫秒，即 10 分钟 |
+| `Auth.APIKeys` | 必填，无默认值 | `X-API-Key` 允许列表，至少配置一个非空 Key |
 | `TencentCloud.SecretID` | 必填，无默认值 | 腾讯云 API 访问凭证 |
 | `TencentCloud.SecretKey` | 必填，无默认值 | 腾讯云 API 访问凭证 |
 | `TencentCloud.Region` | `ap-shanghai` | AGS 地域 |
@@ -215,6 +222,8 @@ make config
 | `Registry.Password` | 必填，无默认值 | Registry 认证密码 |
 | `Registry.AllowedHosts` | `ths-shanghai-tcr.tencentcloudcr.com`<br>`aime-agent-tcr.tencentcloudcr.com` | 允许读取镜像启动命令的 Registry 白名单 |
 | `Registry.RequestTimeout` | `10s` | 从 Registry 解析镜像 Entrypoint/Cmd 的总超时 |
+
+旧的私有运行配置必须增加 `Auth.APIKeys` 后才能启动。仓库中的示例只包含占位值；当前本地私有 YAML 已写入与 Shell 一致的随机 Key。真实 Key 同时存在于受 Git 跟踪的 Shell 中，如果不希望共享该 Key，提交前应重新生成并同步更新本地 YAML。
 
 `TencentCloud.StatusPollInterval` 和 `TencentCloud.StatusPollTimeout` 是历史字段。如果旧的私有配置中仍然保留这两项，当前配置结构也不会读取，服务端不再自动轮询。工具状态由调用方通过 `GET /api/v1/sandbox/tools/status` 按需查询。
 

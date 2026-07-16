@@ -6,6 +6,10 @@ import (
 	"github.com/zeromicro/go-zero/rest"
 )
 
+type AuthConfig struct {
+	APIKeys []string
+}
+
 type TencentCloudConfig struct {
 	SecretID       string        `json:",optional"`
 	SecretKey      string        `json:",optional"`
@@ -32,6 +36,7 @@ type RegistryConfig struct {
 
 type Config struct {
 	rest.RestConf
+	Auth         AuthConfig
 	TencentCloud TencentCloudConfig
 	ImageSync    ImageSyncConfig
 	Registry     RegistryConfig

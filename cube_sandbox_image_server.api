@@ -192,8 +192,9 @@ type SyncImageResponse {
 }
 
 @server (
-	prefix: /api/v1
-	group:  cubeSandboxImage
+	prefix:     /api/v1
+	group:      cubeSandboxImage
+	middleware: ApiKeyAuth
 )
 service cube_sandbox_image_server-api {
 	@doc "创建腾讯云自定义沙箱工具"

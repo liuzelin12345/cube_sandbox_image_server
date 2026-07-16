@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 
 # 用法：
-#   ./sync_image_and_create_tool.sh sync [目标镜像地址]       "格式：<DST_HUB>/<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>"
+#   ./sync_image_and_create_tool.sh sync [目标镜像路径]       格式：<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>
 #   ./sync_image_and_create_tool.sh tool [镜像地址] [工具名称]
 #   ./sync_image_and_create_tool.sh tool --config <完整请求JSON文件>
 #   ./sync_image_and_create_tool.sh watch [toolId] [超时秒]
@@ -65,7 +65,7 @@ set -Eeuo pipefail
 
 # ─── 参数区：均可通过同名环境变量覆盖 ────────────────────────────────────────
 
-# 必填：sync 的目标镜像，或 tool 使用的镜像；为空时交互输入。
+# 必填：sync 使用分组/镜像:标签，tool 使用完整镜像地址；为空时交互输入。
 IMAGE_REFERENCE="${IMAGE_REFERENCE:-}"
 # 必填：tool 创建的工具名称；为空时交互输入。
 TOOL_NAME="${TOOL_NAME:-}"
@@ -73,11 +73,15 @@ TOOL_NAME="${TOOL_NAME:-}"
 TOOL_ID="${TOOL_ID:-}"
 # 可选：完整创建工具请求的 JSON 文件；设置后不再使用 IMAGE_REFERENCE 和 TOOL_NAME。
 TOOL_CONFIG_FILE="${TOOL_CONFIG_FILE:-}"
+# 必填：必须与本地服务 Auth.APIKeys 中的一个值一致。
+API_KEY="apk_36a529b062e7d9ab8843f7b902565920843b526500e0824bd498f1f200c5dfc9"
 
 # API 服务基地址，不包含末尾的 /。
-API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:43999}"
+API_BASE_URL="${API_BASE_URL:-http://paas.myhexin.com/sandbox-adapter}"
 # 同步镜像时使用的源镜像仓库。
 SRC_HUB="${SRC_HUB:-hub-dev.hexin.cn:9544}"
+# 同步镜像时使用的目标镜像仓库，用户无需在镜像路径中填写。
+DST_HUB="${DST_HUB:-aime-agent-tcr.tencentcloudcr.com}"
 # 镜像同步接口路径。
 SYNC_API_PATH="${SYNC_API_PATH:-/api/v1/images/sync}"
 # 沙箱工具创建接口路径。
@@ -96,6 +100,13 @@ require_command() {
 
   if ! command -v "${command_name}" >/dev/null 2>&1; then
     echo "错误：未找到依赖命令 ${command_name}" >&2
+    return 1
+  fi
+}
+
+validate_api_key() {
+  if [[ -z "${API_KEY//[[:space:]]/}" || "${API_KEY}" == "__GENERATED_API_KEY__" ]]; then
+    echo "错误：请先在脚本顶部配置 API_KEY" >&2
     return 1
   fi
 }
@@ -143,42 +154,38 @@ resolve_required() {
 
 parse_image_reference() {
   local image_reference="$1"
-  local dst_hub_variable="$2"
-  local image_group_variable="$3"
-  local image_name_variable="$4"
-  local image_tag_variable="$5"
-  local pattern='^([^/[:space:]]+)/([^/[:space:]]+)/([^/:[:space:]]+):([^/:[:space:]]+)$'
+  local image_group_variable="$2"
+  local image_name_variable="$3"
+  local image_tag_variable="$4"
+  local pattern='^([^/[:space:]]+)/([^/:[:space:]]+):([^/:[:space:]]+)$'
 
   if [[ ! "${image_reference}" =~ ${pattern} ]]; then
     return 1
   fi
 
-  printf -v "${dst_hub_variable}" '%s' "${BASH_REMATCH[1]}"
-  printf -v "${image_group_variable}" '%s' "${BASH_REMATCH[2]}"
-  printf -v "${image_name_variable}" '%s' "${BASH_REMATCH[3]}"
-  printf -v "${image_tag_variable}" '%s' "${BASH_REMATCH[4]}"
+  printf -v "${image_group_variable}" '%s' "${BASH_REMATCH[1]}"
+  printf -v "${image_name_variable}" '%s' "${BASH_REMATCH[2]}"
+  printf -v "${image_tag_variable}" '%s' "${BASH_REMATCH[3]}"
 }
 
 resolve_sync_image_reference() {
   local current_value="$1"
   local image_reference_variable="$2"
-  local dst_hub_variable="$3"
-  local image_group_variable="$4"
-  local image_name_variable="$5"
-  local image_tag_variable="$6"
+  local image_group_variable="$3"
+  local image_name_variable="$4"
+  local image_tag_variable="$5"
   local value="${current_value}"
 
   while true; do
     if [[ -z "${value//[[:space:]]/}" ]]; then
       printf '%s\n' \
-        "请输入目标镜像地址" \
-        "格式：<DST_HUB>/<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>"
-      read_required "目标镜像地址" value || return 1
+        "请输入目标镜像路径" \
+        "格式：<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>"
+      read_required "目标镜像路径" value || return 1
     fi
 
     if parse_image_reference \
       "${value}" \
-      "${dst_hub_variable}" \
       "${image_group_variable}" \
       "${image_name_variable}" \
       "${image_tag_variable}"; then
@@ -186,7 +193,7 @@ resolve_sync_image_reference() {
       return 0
     fi
 
-    echo "错误：镜像地址格式必须为 <DST_HUB>/<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>" >&2
+    echo "错误：镜像路径格式必须为 <IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>" >&2
     value=""
   done
 }
@@ -224,7 +231,7 @@ json_escape() {
 # sync：将源仓库中的同名镜像同步到指定的目标镜像地址。
 cmd_sync() {
   local image_reference="${1:-${IMAGE_REFERENCE}}"
-  local DST_HUB IMAGE_GROUP IMAGE_NAME IMAGE_TAG
+  local IMAGE_GROUP IMAGE_NAME IMAGE_TAG
   local sync_response sync_status synced_image
   local sync_code_pattern='"code"[[:space:]]*:[[:space:]]*0[[:space:]]*[,}]'
 
@@ -234,13 +241,15 @@ cmd_sync() {
   fi
 
   require_command curl || return 1
+  validate_api_key || return 1
   resolve_sync_image_reference \
-    "${image_reference}" image_reference DST_HUB IMAGE_GROUP IMAGE_NAME IMAGE_TAG || return 1
+    "${image_reference}" image_reference IMAGE_GROUP IMAGE_NAME IMAGE_TAG || return 1
 
-  echo "同步镜像：${SRC_HUB}/${IMAGE_NAME}:${IMAGE_TAG} -> ${image_reference}"
+  echo "同步镜像：${SRC_HUB}/${IMAGE_NAME}:${IMAGE_TAG} -> ${DST_HUB}/${image_reference}"
   if ! sync_response="$(
     curl --silent --show-error --fail-with-body \
       --get "${API_BASE_URL}${SYNC_API_PATH}" \
+      --header "X-API-Key: ${API_KEY}" \
       --data-urlencode "srcHub=${SRC_HUB}" \
       --data-urlencode "dstHub=${DST_HUB}" \
       --data-urlencode "group=${IMAGE_GROUP}" \
@@ -283,7 +292,7 @@ cmd_watch() {
   local started_at="${SECONDS}"
   local elapsed=0
   local tool_status="UNKNOWN"
-  local status_response status_reason
+  local status_response status_reason status_error_code
 
   if [[ $# -gt 2 ]]; then
     echo "错误：用法：$0 watch [toolId] [超时秒]" >&2
@@ -291,6 +300,7 @@ cmd_watch() {
   fi
 
   require_command curl || return 1
+  validate_api_key || return 1
   resolve_required "${tool_id}" "请输入要查询的工具 ID（TOOL_ID）" tool_id || return 1
   validate_positive_integer "${TOOL_STATUS_POLL_INTERVAL}" TOOL_STATUS_POLL_INTERVAL || return 1
   validate_positive_integer "${timeout}" "watch 超时" || return 1
@@ -300,8 +310,15 @@ cmd_watch() {
     if ! status_response="$(
       curl --silent --show-error --fail-with-body \
         --get "${API_BASE_URL}${TOOL_STATUS_API_PATH}" \
+        --header "X-API-Key: ${API_KEY}" \
         --data-urlencode "toolId=${tool_id}"
     )"; then
+      status_error_code="$(extract_json_string "${status_response}" code || true)"
+      if [[ "${status_error_code}" == "UNAUTHORIZED" ]]; then
+        echo "错误：API Key 鉴权失败，停止监听" >&2
+        print_response "${status_response}" >&2
+        return 1
+      fi
       echo "状态查询失败，将继续重试：" >&2
       print_response "${status_response}" >&2
       sleep "${TOOL_STATUS_POLL_INTERVAL}"
@@ -374,6 +391,7 @@ cmd_tool() {
   fi
 
   require_command curl || return 1
+  validate_api_key || return 1
   validate_positive_integer "${TOOL_STATUS_POLL_INTERVAL}" TOOL_STATUS_POLL_INTERVAL || return 1
   validate_positive_integer "${TOOL_STATUS_POLL_TIMEOUT}" TOOL_STATUS_POLL_TIMEOUT || return 1
 
@@ -411,6 +429,7 @@ cmd_tool() {
   if ! tool_response="$(
     curl --silent --show-error --fail-with-body \
       --request POST "${API_BASE_URL}${TOOL_API_PATH}" \
+      --header "X-API-Key: ${API_KEY}" \
       --header 'Content-Type: application/json' \
       --data "${tool_payload}"
   )"; then
@@ -440,7 +459,7 @@ cmd_tool() {
 print_usage() {
   printf '%s\n' \
     "用法：" \
-    "  $0 sync  [目标镜像地址]         同步镜像" \
+    "  $0 sync  [目标镜像路径]         同步镜像" \
     "  $0 tool  [镜像地址] [工具名称]  创建沙箱工具并 watch 状态" \
     "  $0 tool  --config <JSON文件>     使用完整接口参数创建并 watch 状态" \
     "  $0 watch [toolId] [超时秒]      查询并持续监听沙箱工具状态" \
@@ -448,13 +467,15 @@ print_usage() {
     "" \
     "必填参数：" \
     "  命令行未提供时，脚本会进行交互式填写。" \
-    "  sync 镜像格式：<DST_HUB>/<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>" \
+    "  sync 镜像格式：<IMAGE_GROUP>/<IMAGE_NAME>:<IMAGE_TAG>" \
     "" \
     "可选环境变量：" \
     "  API_BASE_URL=${API_BASE_URL}" \
     "  SRC_HUB=${SRC_HUB}" \
+    "  DST_HUB=${DST_HUB}" \
     "  TOOL_STATUS_POLL_INTERVAL=${TOOL_STATUS_POLL_INTERVAL}" \
     "  TOOL_STATUS_POLL_TIMEOUT=${TOOL_STATUS_POLL_TIMEOUT}" \
+    "  API_KEY 已在脚本顶部固定配置，不读取环境变量" \
     "" \
     "必填参数也可通过环境变量提供：" \
     "  IMAGE_REFERENCE、TOOL_NAME、TOOL_ID" \

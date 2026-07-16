@@ -13,6 +13,8 @@ import (
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/imagesync"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/registrycommand"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/config"
+	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/middleware"
+	"github.com/zeromicro/go-zero/rest"
 )
 
 type SandboxToolClient interface {
@@ -30,6 +32,7 @@ type ImageCommandResolver interface {
 
 type ServiceContext struct {
 	Config               config.Config
+	ApiKeyAuth           rest.Middleware
 	SandboxToolClient    SandboxToolClient
 	ImageSyncClient      ImageSyncClient
 	ImageCommandResolver ImageCommandResolver
@@ -76,6 +79,7 @@ func NewServiceContext(c config.Config) (*ServiceContext, error) {
 
 	return &ServiceContext{
 		Config:               c,
+		ApiKeyAuth:           middleware.NewApiKeyAuthMiddleware(c.Auth.APIKeys).Handle,
 		SandboxToolClient:    sandboxToolClient,
 		ImageSyncClient:      imageSyncClient,
 		ImageCommandResolver: imageCommandResolver,
@@ -83,6 +87,18 @@ func NewServiceContext(c config.Config) (*ServiceContext, error) {
 }
 
 func validateConfig(c config.Config) error {
+	if len(c.Auth.APIKeys) == 0 {
+		return fmt.Errorf("Auth.APIKeys must contain at least one key")
+	}
+	for index, apiKey := range c.Auth.APIKeys {
+		trimmed := strings.TrimSpace(apiKey)
+		if trimmed == "" {
+			return fmt.Errorf("Auth.APIKeys[%d] is required", index)
+		}
+		if trimmed != apiKey {
+			return fmt.Errorf("Auth.APIKeys[%d] must not contain surrounding whitespace", index)
+		}
+	}
 	if strings.TrimSpace(c.TencentCloud.SecretID) == "" {
 		return fmt.Errorf("TencentCloud.SecretID is required")
 	}

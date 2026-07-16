@@ -10,6 +10,7 @@ import (
 func TestValidateConfig(t *testing.T) {
 	valid := func() config.Config {
 		return config.Config{
+			Auth: config.AuthConfig{APIKeys: []string{"api-key-1", "api-key-2"}},
 			TencentCloud: config.TencentCloudConfig{
 				SecretID:       "secret-id",
 				SecretKey:      "secret-key",
@@ -35,6 +36,9 @@ func TestValidateConfig(t *testing.T) {
 		mutate    func(*config.Config)
 		wantError string
 	}{
+		{name: "missing API keys", mutate: func(c *config.Config) { c.Auth.APIKeys = nil }, wantError: "Auth.APIKeys must contain at least one key"},
+		{name: "blank API key", mutate: func(c *config.Config) { c.Auth.APIKeys = []string{" "} }, wantError: "Auth.APIKeys[0] is required"},
+		{name: "API key with surrounding whitespace", mutate: func(c *config.Config) { c.Auth.APIKeys = []string{" api-key "} }, wantError: "Auth.APIKeys[0] must not contain surrounding whitespace"},
 		{name: "missing secret ID", mutate: func(c *config.Config) { c.TencentCloud.SecretID = "" }, wantError: "TencentCloud.SecretID is required"},
 		{name: "missing secret key", mutate: func(c *config.Config) { c.TencentCloud.SecretKey = " " }, wantError: "TencentCloud.SecretKey is required"},
 		{name: "missing username", mutate: func(c *config.Config) { c.Registry.Username = "" }, wantError: "Registry.Username is required"},
