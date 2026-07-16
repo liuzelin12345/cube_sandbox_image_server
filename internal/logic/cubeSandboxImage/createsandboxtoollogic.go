@@ -12,7 +12,6 @@ import (
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/apperror"
-	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/registrycommand"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/config"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/types"
@@ -52,9 +51,6 @@ func (l *CreateSandboxToolLogic) CreateSandboxTool(req *types.CreateSandboxToolR
 		defaultCommand, err = l.svcCtx.ImageCommandResolver.ResolveCommand(l.ctx, req.CustomConfiguration.Image)
 		if err != nil {
 			l.Errorf("resolve default image command failed")
-			if errors.Is(err, registrycommand.ErrRegistryNotAllowed) {
-				return rejectedResponse("IMAGE_REGISTRY_NOT_ALLOWED", "镜像仓库不在允许列表中", ""), nil
-			}
 			return rejectedResponse("IMAGE_COMMAND_RESOLVE_FAILED", "获取镜像默认启动命令失败", ""), nil
 		}
 	}

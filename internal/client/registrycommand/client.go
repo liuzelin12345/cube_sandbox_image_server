@@ -2,7 +2,6 @@ package registrycommand
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,17 +13,13 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
-var ErrRegistryNotAllowed = errors.New("image registry is not allowed")
-
 type Client struct {
-	allowedHosts   map[string]struct{}
 	auth           authn.Authenticator
 	requestTimeout time.Duration
 	transport      http.RoundTripper
 }
 
 func NewClient(
-	allowedHosts []string,
 	username string,
 	password string,
 	requestTimeout time.Duration,
@@ -42,25 +37,9 @@ func NewClient(
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-
-	hosts := make(map[string]struct{}, len(allowedHosts))
-	for index, host := range allowedHosts {
-		normalized := normalizeHost(host)
-		if normalized == "" || strings.Contains(normalized, "://") || strings.ContainsAny(normalized, "/?#") {
-			return nil, fmt.Errorf("registry allowedHosts[%d] is invalid", index)
-		}
-		hosts[normalized] = struct{}{}
-	}
-	if len(hosts) == 0 {
-		return nil, fmt.Errorf("at least one registry allowed host is required")
-	}
-	transport = &registryTransport{
-		next:         transport,
-		allowedHosts: hosts,
-	}
+	transport = &httpsTransport{next: transport}
 
 	return &Client{
-		allowedHosts: hosts,
 		auth: &authn.Basic{
 			Username: username,
 			Password: password,
@@ -80,9 +59,6 @@ func (c *Client) ResolveCommand(ctx context.Context, imageReference string) ([]s
 	}
 
 	host := normalizeHost(reference.Context().RegistryStr())
-	if _, ok := c.allowedHosts[host]; !ok {
-		return nil, fmt.Errorf("%w: %s", ErrRegistryNotAllowed, host)
-	}
 
 	requestCtx, cancel := context.WithTimeout(ctx, c.requestTimeout)
 	defer cancel()
@@ -129,34 +105,16 @@ func normalizeHost(host string) string {
 	return strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
 }
 
-type registryTransport struct {
-	next         http.RoundTripper
-	allowedHosts map[string]struct{}
+type httpsTransport struct {
+	next http.RoundTripper
 }
 
-func (t *registryTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (t *httpsTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request == nil || request.URL == nil {
 		return nil, fmt.Errorf("registry request URL is invalid")
 	}
 	if !strings.EqualFold(request.URL.Scheme, "https") {
 		return nil, fmt.Errorf("registry request must use https")
-	}
-	host := normalizeHost(request.URL.Host)
-	if _, ok := t.allowedHosts[host]; ok {
-		return t.next.RoundTrip(request)
-	}
-
-	// Registry implementations may redirect manifest/config blob downloads to
-	// HTTPS object storage. go-containerregistry strips registry authorization
-	// on cross-host redirects; enforce that boundary again before allowing the
-	// unsigned read request to leave the registry allowlist.
-	if request.URL.User != nil ||
-		request.Header.Get("Authorization") != "" ||
-		request.Header.Get("Proxy-Authorization") != "" {
-		return nil, fmt.Errorf("cross-host registry request cannot include credentials")
-	}
-	if request.Method != http.MethodGet && request.Method != http.MethodHead {
-		return nil, fmt.Errorf("cross-host registry request must be read-only")
 	}
 	return t.next.RoundTrip(request)
 }

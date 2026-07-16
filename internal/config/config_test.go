@@ -48,8 +48,6 @@ ImageSync:
 Registry:
   Username: file-registry-user
   Password: file-registry-password
-  AllowedHosts:
-    - registry.example.com
   RequestTimeout: 10s
 `
 	configFile := filepath.Join(t.TempDir(), "config.yaml")
@@ -81,9 +79,6 @@ Registry:
 	}
 	if config.Registry.Username != "file-registry-user" || config.Registry.Password != "file-registry-password" {
 		t.Fatalf("Registry credentials were not loaded from file: %#v", config.Registry)
-	}
-	if len(config.Registry.AllowedHosts) != 1 || config.Registry.AllowedHosts[0] != "registry.example.com" {
-		t.Fatalf("unexpected Registry.AllowedHosts: %#v", config.Registry.AllowedHosts)
 	}
 	if config.Registry.RequestTimeout != 10*time.Second {
 		t.Fatalf("Registry.RequestTimeout = %s", config.Registry.RequestTimeout)
@@ -126,7 +121,7 @@ Registry:
 	if got.ImageSync.MaxResponseBytes != DefaultImageSyncMaxResponseBytes || got.ImageSync.MaxAttempts != DefaultImageSyncMaxAttempts || got.ImageSync.RetryInterval != DefaultImageSyncRetryInterval {
 		t.Fatalf("ImageSync retry defaults = %#v", got.ImageSync)
 	}
-	if len(got.Registry.AllowedHosts) != 1 || got.Registry.AllowedHosts[0] != DefaultRegistryAllowedHost || got.Registry.RequestTimeout != DefaultRegistryRequestTimeout {
+	if got.Registry.RequestTimeout != DefaultRegistryRequestTimeout {
 		t.Fatalf("Registry defaults = %#v", got.Registry)
 	}
 }

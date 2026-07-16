@@ -25,7 +25,4 @@ ImageSync:
 Registry:
   Username: ""
   Password: ""
-  AllowedHosts:
-    - ths-shanghai-tcr.tencentcloudcr.com
-    - aime-agent-tcr.tencentcloudcr.com
   RequestTimeout: 10s

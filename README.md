@@ -220,14 +220,13 @@ make config
 | `ImageSync.RetryInterval` | `500ms` | 首次重试等待时间，后续指数退避，最长 5 秒 |
 | `Registry.Username` | 必填，无默认值 | Registry 认证用户名 |
 | `Registry.Password` | 必填，无默认值 | Registry 认证密码 |
-| `Registry.AllowedHosts` | `ths-shanghai-tcr.tencentcloudcr.com`<br>`aime-agent-tcr.tencentcloudcr.com` | 允许读取镜像启动命令的 Registry 白名单 |
 | `Registry.RequestTimeout` | `10s` | 从 Registry 解析镜像 Entrypoint/Cmd 的总超时 |
 
 旧的私有运行配置必须增加 `Auth.APIKeys` 后才能启动。仓库中的示例只包含占位值；当前本地私有 YAML 已写入与 Shell 一致的随机 Key。真实 Key 同时存在于受 Git 跟踪的 Shell 中，如果不希望共享该 Key，提交前应重新生成并同步更新本地 YAML。
 
 `TencentCloud.StatusPollInterval` 和 `TencentCloud.StatusPollTimeout` 是历史字段。如果旧的私有配置中仍然保留这两项，当前配置结构也不会读取，服务端不再自动轮询。工具状态由调用方通过 `GET /api/v1/sandbox/tools/status` 按需查询。
 
-运行配置会先创建 `internal/config/defaults.go` 中的集中缺省配置，再用 YAML 中显式填写的值覆盖。例如代码缺省值为 `TencentCloud.RequestTimeout=10s`、`ImageSync.RequestTimeout=20s`、`ImageSync.AttemptTimeout=5s`、`Registry.AllowedHosts=[aime-agent-tcr.tencentcloudcr.com]`；当前 YAML 已显式设置上表中的运行值，因此运行时以 YAML 覆盖值为准。
+运行配置会先创建 `internal/config/defaults.go` 中的集中缺省配置，再用 YAML 中显式填写的值覆盖。例如代码缺省值为 `TencentCloud.RequestTimeout=10s`、`ImageSync.RequestTimeout=20s`、`ImageSync.AttemptTimeout=5s`、`Registry.RequestTimeout=10s`；当前 YAML 已显式设置上表中的运行值，因此运行时以 YAML 覆盖值为准。
 
 旧的 `TENCENTCLOUD_*`、`IMAGE_SYNC_ENDPOINT`、`REGISTRY_*` 环境变量不再参与服务配置加载，也不会覆盖 YAML。需要使用其他运行配置时，通过 `-f` 显式指定：
 
@@ -237,11 +236,11 @@ go run . -f /path/to/cubesandboximageserver-api.yaml
 
 敏感字段必须在部署时填入，不要在 README、镜像或新的代码提交中写入真实凭证。
 
-Registry 仅允许 HTTPS，镜像仓库主机必须列在运行配置的 `Registry.AllowedHosts` 中；镜像为多架构时固定选择 `linux/amd64`。Registry 与 Bearer token 服务使用不同主机时，两者都必须纳入白名单，否则客户端不会向未授权主机发送 Registry 凭证。Registry 返回的跨主机 manifest/config blob 下载可以跟随 HTTPS 重定向，但仅允许不携带 `Authorization` 的 `GET`/`HEAD` 请求，因此 COS 等对象存储主机无需加入 Registry 白名单。
+Registry 不再配置 Host 白名单，默认允许访问任意域名的镜像仓库和 Bearer token 服务。所有 Registry 相关请求仍强制使用 HTTPS，镜像为多架构时固定选择 `linux/amd64`；跨主机 manifest/config blob 重定向仍由 Registry 客户端处理，并确保不会把 Registry 的 `Authorization` 请求头发送到重定向目标。
 
 `POST /api/v1/sandbox/tools` 响应中，`accepted=true` 表示腾讯云控制面已接受创建请求，`status=CREATING` 仅表示创建请求已经提交。最终状态需要通过 `GET /api/v1/sandbox/tools/status` 查询；异步创建失败时，该接口返回 `status=FAILED` 和 `statusReason`。
 
-Registry 解析失败时接口仍返回 HTTP 200，但响应为 `accepted=false`、`status=REJECTED`，`errorCode` 为 `IMAGE_COMMAND_RESOLVE_FAILED` 或 `IMAGE_REGISTRY_NOT_ALLOWED`；此时不会调用腾讯云创建或状态查询接口。
+Registry 解析失败时接口仍返回 HTTP 200，但响应为 `accepted=false`、`status=REJECTED`，`errorCode` 为 `IMAGE_COMMAND_RESOLVE_FAILED`；此时不会调用腾讯云创建或状态查询接口。
 
 ## Development
 

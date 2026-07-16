@@ -27,7 +27,6 @@ const (
 	DefaultImageSyncRetryInterval    = 500 * time.Millisecond
 
 	// Registry client defaults.
-	DefaultRegistryAllowedHost    = "aime-agent-tcr.tencentcloudcr.com"
 	DefaultRegistryRequestTimeout = 10 * time.Second
 )
 
@@ -79,8 +78,7 @@ const (
 	// dnsConfig defaults to an empty object.
 )
 
-// DefaultConfig returns a new config value so callers cannot mutate shared
-// slices such as Registry.AllowedHosts.
+// DefaultConfig returns a new config value with all centralized defaults.
 func DefaultConfig() Config {
 	return Config{
 		TencentCloud: TencentCloudConfig{
@@ -97,7 +95,6 @@ func DefaultConfig() Config {
 			RetryInterval:    DefaultImageSyncRetryInterval,
 		},
 		Registry: RegistryConfig{
-			AllowedHosts:   []string{DefaultRegistryAllowedHost},
 			RequestTimeout: DefaultRegistryRequestTimeout,
 		},
 	}

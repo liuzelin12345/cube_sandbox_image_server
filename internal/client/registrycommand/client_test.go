@@ -40,7 +40,7 @@ type registryFixture struct {
 func TestResolveCommandPrefersEntrypointAndUsesBasicAuth(t *testing.T) {
 	fixture := newRegistryFixture(t, []string{"/entrypoint", "--serve"}, []string{"fallback"})
 	transport := fixture.basicTransport(t, "latest")
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	command, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
 	if err != nil {
@@ -54,7 +54,7 @@ func TestResolveCommandPrefersEntrypointAndUsesBasicAuth(t *testing.T) {
 func TestResolveCommandFallsBackToCmdAndSupportsDigest(t *testing.T) {
 	fixture := newRegistryFixture(t, nil, []string{"/bin/sh", "-c", "run"})
 	reference := fmt.Sprintf("%s/%s@%s", testRegistry, testRepository, fixture.manifestDigest)
-	client := newTestClient(t, []string{testRegistry}, time.Second, fixture.basicTransport(t, fixture.manifestDigest.String()))
+	client := newTestClient(t, time.Second, fixture.basicTransport(t, fixture.manifestDigest.String()))
 
 	command, err := client.ResolveCommand(context.Background(), reference)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestResolveCommandFallsBackToCmdAndSupportsDigest(t *testing.T) {
 func TestResolveCommandSupportsBearerAuth(t *testing.T) {
 	fixture := newRegistryFixture(t, []string{"/bearer-entrypoint"}, nil)
 	transport := fixture.bearerTransport(t)
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	command, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
 	if err != nil {
@@ -86,7 +86,7 @@ func TestResolveCommandFollowsCrossHostHTTPSBlobRedirectWithoutCredentials(t *te
 		"https://object-storage.test/config?temporary-signature=redacted",
 		&redirectCalls,
 	)
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	command, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
 	if err != nil {
@@ -107,7 +107,7 @@ func TestResolveCommandRejectsCrossHostHTTPBlobRedirect(t *testing.T) {
 		"http://object-storage.test/config?temporary-signature=redacted",
 		&redirectCalls,
 	)
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	if _, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest"); err == nil {
 		t.Fatal("ResolveCommand() error = nil")
@@ -152,7 +152,7 @@ func TestResolveCommandSelectsLinuxAMD64FromIndex(t *testing.T) {
 			return testResponse(request, http.StatusNotFound, "application/json", nil), nil
 		}
 	})
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	command, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
 	if err != nil {
@@ -181,7 +181,7 @@ func TestResolveCommandRejectsIndexWithoutLinuxAMD64(t *testing.T) {
 		}
 		return testResponse(request, http.StatusOK, string(types.OCIImageIndex), indexBody), nil
 	})
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	if _, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest"); err == nil {
 		t.Fatal("ResolveCommand() error = nil")
@@ -190,7 +190,7 @@ func TestResolveCommandRejectsIndexWithoutLinuxAMD64(t *testing.T) {
 
 func TestResolveCommandRejectsMissingCommand(t *testing.T) {
 	fixture := newRegistryFixture(t, nil, nil)
-	client := newTestClient(t, []string{testRegistry}, time.Second, fixture.basicTransport(t, "latest"))
+	client := newTestClient(t, time.Second, fixture.basicTransport(t, "latest"))
 
 	if _, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest"); err == nil {
 		t.Fatal("ResolveCommand() error = nil")
@@ -225,27 +225,23 @@ func TestResolveCommandRejectsInvalidConfigJSON(t *testing.T) {
 			return testResponse(request, http.StatusNotFound, "application/json", nil), nil
 		}
 	})
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	if _, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest"); err == nil {
 		t.Fatal("ResolveCommand() error = nil")
 	}
 }
 
-func TestResolveCommandRejectsRegistryOutsideAllowlistBeforeNetwork(t *testing.T) {
-	called := false
-	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
-		called = true
-		return nil, errors.New("unexpected network call")
-	})
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+func TestResolveCommandAllowsAnyHTTPSRegistry(t *testing.T) {
+	fixture := newRegistryFixture(t, []string{"/entrypoint"}, nil)
+	client := newTestClient(t, time.Second, fixture.basicTransport(t, "latest"))
 
-	_, err := client.ResolveCommand(context.Background(), "not-allowed.test/team/sandbox:latest")
-	if !errors.Is(err, ErrRegistryNotAllowed) {
-		t.Fatalf("ResolveCommand() error = %v, want ErrRegistryNotAllowed", err)
+	command, err := client.ResolveCommand(context.Background(), "another-registry.test/team/sandbox:latest")
+	if err != nil {
+		t.Fatalf("ResolveCommand() error = %v", err)
 	}
-	if called {
-		t.Fatal("transport was called for a non-allowlisted registry")
+	if want := []string{"/entrypoint"}; !reflect.DeepEqual(command, want) {
+		t.Fatalf("ResolveCommand() = %#v, want %#v", command, want)
 	}
 }
 
@@ -255,7 +251,7 @@ func TestResolveCommandNeverUsesInsecureRegistryTransport(t *testing.T) {
 		schemes = append(schemes, request.URL.Scheme)
 		return nil, errors.New("unexpected network call")
 	})
-	client := newTestClient(t, []string{"localhost"}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
 	if _, err := client.ResolveCommand(context.Background(), "localhost/team/sandbox:latest"); err == nil {
 		t.Fatal("ResolveCommand() error = nil")
@@ -267,24 +263,46 @@ func TestResolveCommandNeverUsesInsecureRegistryTransport(t *testing.T) {
 	}
 }
 
-func TestResolveCommandDoesNotSendCredentialsToUnlistedBearerRealm(t *testing.T) {
+func TestResolveCommandAllowsHTTPSBearerRealmOnAnotherHost(t *testing.T) {
+	fixture := newRegistryFixture(t, []string{"/bearer-entrypoint"}, nil)
 	var hosts []string
 	transport := roundTripperFunc(func(request *http.Request) (*http.Response, error) {
 		hosts = append(hosts, request.URL.Host)
-		if request.URL.Path == "/v2/" {
-			header := http.Header{"Www-Authenticate": []string{`Bearer realm="https://auth.not-allowed.test/token",service="registry.test"`}}
+		switch request.URL.Path {
+		case "/v2/":
+			header := http.Header{"Www-Authenticate": []string{`Bearer realm="https://auth.registry.test/token",service="registry.test"`}}
 			return testResponseWithHeader(request, http.StatusUnauthorized, header, nil), nil
+		case "/token":
+			username, password, ok := request.BasicAuth()
+			if !ok || username != testUsername || password != testPassword {
+				return nil, fmt.Errorf("missing token endpoint basic authentication")
+			}
+			return testResponse(request, http.StatusOK, "application/json", []byte(`{"token":"bearer-token"}`)), nil
+		case "/v2/" + testRepository + "/manifests/latest":
+			return testResponse(request, http.StatusOK, string(types.OCIManifestSchema1), fixture.manifest), nil
+		case "/v2/" + testRepository + "/blobs/" + fixture.configDigest.String():
+			return testResponse(request, http.StatusOK, string(types.OCIConfigJSON), fixture.config), nil
+		default:
+			return testResponse(request, http.StatusNotFound, "application/json", nil), nil
 		}
-		return testResponse(request, http.StatusInternalServerError, "application/json", nil), nil
 	})
-	client := newTestClient(t, []string{testRegistry}, time.Second, transport)
+	client := newTestClient(t, time.Second, transport)
 
-	_, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
-	if err == nil {
-		t.Fatal("ResolveCommand() error = nil")
+	command, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
+	if err != nil {
+		t.Fatalf("ResolveCommand() error = %v", err)
 	}
-	if len(hosts) != 1 || hosts[0] != testRegistry {
-		t.Fatalf("transport hosts = %#v, credentials may have left the allowlist", hosts)
+	if want := []string{"/bearer-entrypoint"}; !reflect.DeepEqual(command, want) {
+		t.Fatalf("ResolveCommand() = %#v, want %#v", command, want)
+	}
+	foundAuthHost := false
+	for _, host := range hosts {
+		if host == "auth.registry.test" {
+			foundAuthHost = true
+		}
+	}
+	if !foundAuthHost {
+		t.Fatalf("transport hosts = %#v, want cross-host bearer realm", hosts)
 	}
 }
 
@@ -353,7 +371,7 @@ func TestResolveCommandHandlesRegistryFailuresWithoutLeakingCredentials(t *testi
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			client := newTestClient(t, []string{testRegistry}, test.timeout, test.transport)
+			client := newTestClient(t, test.timeout, test.transport)
 			_, err := client.ResolveCommand(context.Background(), testRegistry+"/"+testRepository+":latest")
 			if err == nil {
 				t.Fatal("ResolveCommand() error = nil")
@@ -368,29 +386,26 @@ func TestResolveCommandHandlesRegistryFailuresWithoutLeakingCredentials(t *testi
 func TestNewClientValidatesConfiguration(t *testing.T) {
 	tests := []struct {
 		name     string
-		hosts    []string
 		username string
 		password string
 		timeout  time.Duration
 	}{
-		{name: "missing username", hosts: []string{testRegistry}, password: testPassword, timeout: time.Second},
-		{name: "missing password", hosts: []string{testRegistry}, username: testUsername, timeout: time.Second},
-		{name: "missing hosts", username: testUsername, password: testPassword, timeout: time.Second},
-		{name: "invalid host", hosts: []string{"https://registry.test"}, username: testUsername, password: testPassword, timeout: time.Second},
-		{name: "invalid timeout", hosts: []string{testRegistry}, username: testUsername, password: testPassword},
+		{name: "missing username", password: testPassword, timeout: time.Second},
+		{name: "missing password", username: testUsername, timeout: time.Second},
+		{name: "invalid timeout", username: testUsername, password: testPassword},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewClient(test.hosts, test.username, test.password, test.timeout, http.DefaultTransport); err == nil {
+			if _, err := NewClient(test.username, test.password, test.timeout, http.DefaultTransport); err == nil {
 				t.Fatal("NewClient() error = nil")
 			}
 		})
 	}
 }
 
-func newTestClient(t *testing.T, hosts []string, timeout time.Duration, transport http.RoundTripper) *Client {
+func newTestClient(t *testing.T, timeout time.Duration, transport http.RoundTripper) *Client {
 	t.Helper()
-	client, err := NewClient(hosts, testUsername, testPassword, timeout, transport)
+	client, err := NewClient(testUsername, testPassword, timeout, transport)
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}

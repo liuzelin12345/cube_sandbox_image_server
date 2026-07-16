@@ -30,7 +30,6 @@ type ImageSyncConfig struct {
 type RegistryConfig struct {
 	Username       string        `json:",optional"`
 	Password       string        `json:",optional"`
-	AllowedHosts   []string      `json:",optional"`
 	RequestTimeout time.Duration `json:",optional"`
 }
 

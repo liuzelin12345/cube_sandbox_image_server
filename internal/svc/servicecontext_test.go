@@ -25,7 +25,6 @@ func TestValidateConfig(t *testing.T) {
 			Registry: config.RegistryConfig{
 				Username:       "registry-user",
 				Password:       "registry-password",
-				AllowedHosts:   []string{"registry.example.com"},
 				RequestTimeout: 10 * time.Second,
 			},
 		}
@@ -43,7 +42,6 @@ func TestValidateConfig(t *testing.T) {
 		{name: "missing secret key", mutate: func(c *config.Config) { c.TencentCloud.SecretKey = " " }, wantError: "TencentCloud.SecretKey is required"},
 		{name: "missing username", mutate: func(c *config.Config) { c.Registry.Username = "" }, wantError: "Registry.Username is required"},
 		{name: "missing password", mutate: func(c *config.Config) { c.Registry.Password = "\t" }, wantError: "Registry.Password is required"},
-		{name: "missing allowed hosts", mutate: func(c *config.Config) { c.Registry.AllowedHosts = nil }, wantError: "Registry.AllowedHosts must contain at least one host"},
 		{name: "invalid timeout", mutate: func(c *config.Config) { c.Registry.RequestTimeout = 0 }, wantError: "Registry.RequestTimeout must be greater than zero"},
 	}
 

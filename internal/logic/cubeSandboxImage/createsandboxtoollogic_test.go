@@ -3,7 +3,6 @@ package cubeSandboxImage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +11,6 @@ import (
 	tcags "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/ags/v20250920"
 	tcerr "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 
-	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/client/registrycommand"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/config"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 )
@@ -162,11 +160,6 @@ func TestCreateSandboxToolDoesNotCallTencentCloudWhenRegistryResolveFails(t *tes
 			requestCommand: []string{"/caller-command"},
 			resolveError:   errors.New("registry timeout"),
 			wantCode:       "IMAGE_COMMAND_RESOLVE_FAILED",
-		},
-		{
-			name:         "registry not allowed",
-			resolveError: fmt.Errorf("%w: registry.example.com", registrycommand.ErrRegistryNotAllowed),
-			wantCode:     "IMAGE_REGISTRY_NOT_ALLOWED",
 		},
 	}
 

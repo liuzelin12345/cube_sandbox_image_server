@@ -67,7 +67,6 @@ func NewServiceContext(c config.Config) (*ServiceContext, error) {
 		return nil, fmt.Errorf("initialize image sync client: %w", err)
 	}
 	imageCommandResolver, err := registrycommand.NewClient(
-		c.Registry.AllowedHosts,
 		c.Registry.Username,
 		c.Registry.Password,
 		c.Registry.RequestTimeout,
@@ -125,9 +124,6 @@ func validateConfig(c config.Config) error {
 	}
 	if strings.TrimSpace(c.Registry.Password) == "" {
 		return fmt.Errorf("Registry.Password is required")
-	}
-	if len(c.Registry.AllowedHosts) == 0 {
-		return fmt.Errorf("Registry.AllowedHosts must contain at least one host")
 	}
 	if c.Registry.RequestTimeout <= 0 {
 		return fmt.Errorf("Registry.RequestTimeout must be greater than zero")
