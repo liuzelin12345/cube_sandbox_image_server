@@ -9,17 +9,18 @@ import (
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/handler"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 
-	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/rest"
 )
 
-var configFile = flag.String("f", "etc/cubesandboximageserver-api.yaml", "the config file")
+var configFile = flag.String("f", config.DefaultConfigFile, "the config file")
 
 func main() {
 	flag.Parse()
 
-	var c config.Config
-	conf.MustLoad(*configFile, &c)
+	c, err := config.Load(*configFile)
+	if err != nil {
+		log.Fatalf("load service config: %v", err)
+	}
 
 	server := rest.MustNewServer(c.RestConf)
 	defer server.Stop()

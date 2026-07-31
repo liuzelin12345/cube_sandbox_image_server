@@ -1,0 +1,31 @@
+Name: cube_sandbox_image_server-api
+Host: 0.0.0.0
+Port: 43999
+Timeout: 600000
+
+Auth:
+  APIKeys:
+    - "replace-with-api-key"
+
+TencentCloud:
+  SecretID: ""
+  SecretKey: ""
+  Region: ap-shanghai
+  Endpoint: ags.tencentcloudapi.com
+  RequestTimeout: 60s
+
+ImageSync:
+  Endpoint: http://172.20.208.115/sync/image
+  AllowedImageNames:
+    - aime-sandbox-light-server
+    - aime-harness-sandbox-image
+  RequestTimeout: 600s
+  AttemptTimeout: 300s
+  MaxResponseBytes: 1048576
+  MaxAttempts: 3
+  RetryInterval: 500ms
+
+Registry:
+  Username: ""
+  Password: ""
+  RequestTimeout: 10s

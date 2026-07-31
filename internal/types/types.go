@@ -3,15 +3,22 @@
 
 package types
 
+type CosStorageSource struct {
+	Endpoint   string `json:"endpoint,optional"`
+	BucketName string `json:"bucketName,optional"`
+	BucketPath string `json:"bucketPath,optional"`
+}
+
 type CreateSandboxToolRequest struct {
 	ToolName             string               `json:"toolName"`
 	Description          string               `json:"description,optional"`
-	DefaultTimeout       string               `json:"defaultTimeout,optional,default=5m"`
+	DefaultTimeout       string               `json:"defaultTimeout,optional"`
 	ClientToken          string               `json:"clientToken,optional"`
-	RoleArn              string               `json:"roleArn,optional,default=qcs::cam::uin/100032159895:roleName/sandbox_test"`
-	Persistent           bool                 `json:"persistent,optional,default=false"`
+	RoleArn              string               `json:"roleArn,optional"`
+	Persistent           *bool                `json:"persistent,optional"`
 	Tags                 []Tag                `json:"tags,optional"`
 	NetworkConfiguration NetworkConfiguration `json:"networkConfiguration,optional"`
+	StorageMounts        []StorageMount       `json:"storageMounts,optional"`
 	CustomConfiguration  CustomConfiguration  `json:"customConfiguration"`
 }
 
@@ -27,8 +34,8 @@ type CreateSandboxToolResponse struct {
 
 type CustomConfiguration struct {
 	Image             string                `json:"image"`
-	ImageRegistryType string                `json:"imageRegistryType,optional,default=enterprise,options=[enterprise,personal]"`
-	Command           []string              `json:"command"`
+	ImageRegistryType string                `json:"imageRegistryType,optional,options=[enterprise,personal]"`
+	Command           []string              `json:"command,optional"`
 	Args              []string              `json:"args,optional"`
 	Env               []EnvironmentVariable `json:"env,optional"`
 	Ports             []PortConfiguration   `json:"ports,optional"`
@@ -48,14 +55,25 @@ type EnvironmentVariable struct {
 	Value string `json:"value"`
 }
 
+type GetSandboxToolStatusRequest struct {
+	ToolId string `form:"toolId"`
+}
+
+type GetSandboxToolStatusResponse struct {
+	ToolId       string `json:"toolId"`
+	Status       string `json:"status"`
+	StatusReason string `json:"statusReason,optional"`
+	RequestId    string `json:"requestId,optional"`
+}
+
 type HttpGetAction struct {
-	Path   string `json:"path,optional,default=/health"`
-	Port   int64  `json:"port,optional,default=49999"`
-	Scheme string `json:"scheme,optional,default=HTTP,options=[HTTP,HTTPS]"`
+	Path   string `json:"path,optional"`
+	Port   int64  `json:"port,optional"`
+	Scheme string `json:"scheme,optional,options=[HTTP,HTTPS]"`
 }
 
 type NetworkConfiguration struct {
-	NetworkMode string           `json:"networkMode,optional,default=PUBLIC,options=[PUBLIC,VPC,SANDBOX]"`
+	NetworkMode string           `json:"networkMode,optional,options=[PUBLIC,VPC,SANDBOX]"`
 	VpcConfig   VpcConfiguration `json:"vpcConfig,optional"`
 }
 
@@ -67,16 +85,27 @@ type PortConfiguration struct {
 
 type ProbeConfiguration struct {
 	HttpGet          HttpGetAction `json:"httpGet,optional"`
-	ReadyTimeoutMs   int64         `json:"readyTimeoutMs,optional,default=30000"`
-	ProbeTimeoutMs   int64         `json:"probeTimeoutMs,optional,default=1000"`
-	ProbePeriodMs    int64         `json:"probePeriodMs,optional,default=1000"`
-	SuccessThreshold int64         `json:"successThreshold,optional,default=1"`
-	FailureThreshold int64         `json:"failureThreshold,optional,default=100"`
+	ReadyTimeoutMs   int64         `json:"readyTimeoutMs,optional"`
+	ProbeTimeoutMs   int64         `json:"probeTimeoutMs,optional"`
+	ProbePeriodMs    int64         `json:"probePeriodMs,optional"`
+	SuccessThreshold int64         `json:"successThreshold,optional"`
+	FailureThreshold int64         `json:"failureThreshold,optional"`
 }
 
 type ResourceConfiguration struct {
-	CPU    string `json:"cpu,optional,default=1"`
-	Memory string `json:"memory,optional,default=2Gi"`
+	CPU    string `json:"cpu,optional"`
+	Memory string `json:"memory,optional"`
+}
+
+type StorageMount struct {
+	Name          string        `json:"name,optional"`
+	StorageSource StorageSource `json:"storageSource,optional"`
+	MountPath     string        `json:"mountPath,optional"`
+	ReadOnly      *bool         `json:"readOnly,optional"`
+}
+
+type StorageSource struct {
+	Cos CosStorageSource `json:"cos,optional"`
 }
 
 type SyncImageData struct {

@@ -38,6 +38,9 @@ func (l *SyncImageLogic) SyncImage(req *types.SyncImageRequest) (resp *types.Syn
 	if err != nil {
 		return nil, apperror.New(http.StatusBadRequest, "INVALID_ARGUMENT", err.Error(), err)
 	}
+	if !isAllowedImageName(request.Image, l.svcCtx.Config.ImageSync.AllowedImageNames) {
+		return nil, apperror.New(http.StatusForbidden, "IMAGE_NOT_ALLOWED", "镜像名不在同步白名单中", nil)
+	}
 	if l.svcCtx.ImageSyncClient == nil {
 		return nil, apperror.New(http.StatusInternalServerError, "IMAGE_SYNC_CLIENT_UNAVAILABLE", "镜像同步客户端未初始化", nil)
 	}
@@ -65,6 +68,15 @@ func (l *SyncImageLogic) SyncImage(req *types.SyncImageRequest) (resp *types.Syn
 		},
 		Status: result.Status,
 	}, nil
+}
+
+func isAllowedImageName(imageName string, allowedImageNames []string) bool {
+	for _, allowedImageName := range allowedImageNames {
+		if imageName == allowedImageName {
+			return true
+		}
+	}
+	return false
 }
 
 func buildSyncImageRequest(input *types.SyncImageRequest) (imagesync.Request, error) {

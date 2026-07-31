@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	cubeSandboxImage "github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/handler/cubeSandboxImage"
+	health "github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/handler/health"
 	"github.com/TencentCloudAgentRuntime/ags-cookbook/examples/custom-image-go-sdk/cube_sandbox_image_server/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -14,20 +15,40 @@ import (
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.ApiKeyAuth},
+			[]rest.Route{
+				{
+					// 将镜像从源镜像仓库同步到目标镜像仓库
+					Method:  http.MethodGet,
+					Path:    "/images/sync",
+					Handler: cubeSandboxImage.SyncImageHandler(serverCtx),
+				},
+				{
+					// 创建腾讯云自定义沙箱工具
+					Method:  http.MethodPost,
+					Path:    "/sandbox/tools",
+					Handler: cubeSandboxImage.CreateSandboxToolHandler(serverCtx),
+				},
+				{
+					// 查询腾讯云自定义沙箱工具状态
+					Method:  http.MethodGet,
+					Path:    "/sandbox/tools/status",
+					Handler: cubeSandboxImage.GetSandboxToolStatusHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/v1"),
+	)
+
+	server.AddRoutes(
 		[]rest.Route{
 			{
-				// 将镜像从源镜像仓库同步到目标镜像仓库
+				// Kubernetes Readiness 探针
 				Method:  http.MethodGet,
-				Path:    "/images/sync",
-				Handler: cubeSandboxImage.SyncImageHandler(serverCtx),
-			},
-			{
-				// 创建腾讯云自定义沙箱工具
-				Method:  http.MethodPost,
-				Path:    "/sandbox/tools",
-				Handler: cubeSandboxImage.CreateSandboxToolHandler(serverCtx),
+				Path:    "/readiness",
+				Handler: health.ReadinessHandler(serverCtx),
 			},
 		},
-		rest.WithPrefix("/api/v1"),
 	)
 }

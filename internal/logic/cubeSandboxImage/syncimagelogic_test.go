@@ -58,6 +58,21 @@ func TestSyncImageValidatesRequiredFields(t *testing.T) {
 	}
 }
 
+func TestSyncImageRejectsImageOutsideWhitelist(t *testing.T) {
+	logic := newSyncLogic(&imageSyncClientMock{sync: func(context.Context, imagesync.Request) (*imagesync.Response, error) {
+		t.Fatal("Sync should not be called")
+		return nil, nil
+	}}, time.Second)
+	request := validSyncRequest()
+	request.Image = "not-allowed-image"
+
+	_, err := logic.SyncImage(request)
+	var appErr *apperror.Error
+	if !errors.As(err, &appErr) || appErr.StatusCode != 403 || appErr.Code != "IMAGE_NOT_ALLOWED" {
+		t.Fatalf("SyncImage() error = %#v", err)
+	}
+}
+
 func TestSyncImageReturnsGatewayTimeout(t *testing.T) {
 	client := &imageSyncClientMock{sync: func(ctx context.Context, _ imagesync.Request) (*imagesync.Response, error) {
 		<-ctx.Done()
@@ -74,7 +89,10 @@ func TestSyncImageReturnsGatewayTimeout(t *testing.T) {
 
 func newSyncLogic(client svc.ImageSyncClient, timeout time.Duration) *SyncImageLogic {
 	return NewSyncImageLogic(context.Background(), &svc.ServiceContext{
-		Config:          config.Config{ImageSync: config.ImageSyncConfig{RequestTimeout: timeout}},
+		Config: config.Config{ImageSync: config.ImageSyncConfig{
+			AllowedImageNames: []string{"cube-sandbox/sandbox-code"},
+			RequestTimeout:    timeout,
+		}},
 		ImageSyncClient: client,
 	})
 }
